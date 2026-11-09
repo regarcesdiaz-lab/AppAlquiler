@@ -66,8 +66,47 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .npm/
-.next/
+.pnpm-store/
+.yarn/*
+!.yarn/releases
 .turbo/
+coverage/
+*.tsbuildinfo
+
+# ============================================
+# Expo / React Native (mobile/)
+# ============================================
+.expo/
+.expo-shared/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+*.orig.*
+# Generated native folders (Expo prebuild / CNG)
+mobile/ios/
+mobile/android/
+.kotlin/
+# Signing credentials — never commit
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+credentials.json
+
+# ============================================
+# Next.js (web/)
+# ============================================
+.next/
+out/
+next-env.d.ts
+.vercel/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
 # ============================================
 # Local storage / uploads (receipts, documents)
