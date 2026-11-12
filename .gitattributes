@@ -1,0 +1,6 @@
+* text=auto
+# Shell scripts run inside Linux containers: keep LF even on Windows checkouts.
+*.sh text eol=lf
+# Generated API files are written with LF by the generators; keep them LF so drift checks stay clean.
+backend/openapi.json text eol=lf
+mobile/src/api/schema.d.ts text eol=lf

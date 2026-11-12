@@ -31,14 +31,14 @@ Definir como tokens en `mobile/src/theme/colors.ts` y como variables CSS en `web
 
 Colores de estado (siempre con texto):
 
-| Estado | Texto | Fondo claro | Etiqueta |
-|---|---|---|---|
-| `overdue` | #B42318 | #FEF3F2 | Atrasado / Debe RD$X |
-| `pending_confirmation` | #B54708 | #FFFAEB | Por confirmar |
-| `promise` | #475467 | #F2F4F7 | En pausa · promesa día X |
-| `upcoming` | #0E5E6F | #E6F2F4 | Vence el día X |
-| `paid` | #067647 | #ECFDF3 | Al día |
-| `vacant` | #5E6666 | transparente con borde | Vacío |
+| Estado | Texto claro | Fondo claro | Texto oscuro | Fondo oscuro | Etiqueta |
+|---|---|---|---|---|---|
+| `overdue` | #B42318 | #FEF3F2 | #FDA29B | #55160C | Atrasado / Debe RD$X |
+| `pending_confirmation` | #B54708 | #FFFAEB | #FEC84B | #4E1D09 | Por confirmar |
+| `promise` | #475467 | #F2F4F7 | #D0D5DD | #344054 | En pausa · promesa día X |
+| `upcoming` | #0E5E6F | #E6F2F4 | #5FB3C2 | #0F3540 | Vence el día X |
+| `paid` | #067647 | #ECFDF3 | #75E0A7 | #053321 | Al día |
+| `vacant` | #5E6666 | transparente con borde #E4E4E0 | #A3ABAB | transparente con borde #2E3333 | Vacío |
 
 Contraste mínimo WCAG AA en todo texto.
 

@@ -1,0 +1,106 @@
+/* Design tokens from docs/BRAND.md — same values as mobile/src/theme. Never use raw values in components. */
+:root {
+  color-scheme: light dark;
+
+  --color-brand: #0e5e6f;
+  --color-brand-soft: #e6f2f4;
+  --color-bg: #f7f7f5;
+  --color-surface: #ffffff;
+  --color-border: #e4e4e0;
+  --color-text: #1a1d1d;
+  --color-text-muted: #5e6666;
+  --color-on-brand: #ffffff;
+
+  /* Tenant status colors (always shown with a text label). */
+  --status-overdue-text: #b42318;
+  --status-overdue-bg: #fef3f2;
+  --status-pending-text: #b54708;
+  --status-pending-bg: #fffaeb;
+  --status-promise-text: #475467;
+  --status-promise-bg: #f2f4f7;
+  --status-upcoming-text: #0e5e6f;
+  --status-upcoming-bg: #e6f2f4;
+  --status-paid-text: #067647;
+  --status-paid-bg: #ecfdf3;
+  --status-vacant-text: #5e6666;
+  --status-vacant-bg: transparent;
+  --status-vacant-border: #e4e4e0;
+
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-chip: 999px;
+
+  --touch-min: 48px;
+  --reading-max-width: 720px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-brand: #5fb3c2;
+    --color-brand-soft: #0f3540;
+    --color-bg: #121414;
+    --color-surface: #1c1f1f;
+    --color-border: #2e3333;
+    --color-text: #f2f2f0;
+    --color-text-muted: #a3abab;
+    --color-on-brand: #121414;
+
+    --status-overdue-text: #fda29b;
+    --status-overdue-bg: #55160c;
+    --status-pending-text: #fec84b;
+    --status-pending-bg: #4e1d09;
+    --status-promise-text: #d0d5dd;
+    --status-promise-bg: #344054;
+    --status-upcoming-text: #5fb3c2;
+    --status-upcoming-bg: #0f3540;
+    --status-paid-text: #75e0a7;
+    --status-paid-bg: #053321;
+    --status-vacant-text: #a3abab;
+    --status-vacant-border: #2e3333;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-regular);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--color-brand);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
