@@ -41,7 +41,8 @@ jobs:
       MESSAGING_MODE: simulator
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv only publishes full version tags (no floating "v10").
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           version: "0.13.8"
           python-version: "3.12"
