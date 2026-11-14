@@ -5,25 +5,25 @@ SaaS para propietarios de apartamentos en República Dominicana (1 a 20 unidades
 Promesa del producto: **cobrar a tiempo sin perseguir a nadie**.
 
 El proyecto tiene tres piezas:
-1. **App móvil del propietario** (iPhone, Android y tablets), descargable desde App Store y Google Play.
-2. **Sitio web profesional** para presentar el producto, explicar cómo funciona, mostrar planes, presentar al creador y llevar a la descarga.
+1. **App del propietario** con un solo código: app móvil (iPhone, Android y tablets) descargable desde App Store y Google Play, y la misma app como **panel web** en el navegador de la computadora (`app.<dominio>`).
+2. **Sitio web profesional** para presentar el producto, explicar cómo funciona, mostrar planes, presentar al creador y llevar a la descarga o al panel.
 3. **Backend** con la API, los agentes y el canal de WhatsApp.
 
 Usuarios:
-- El **propietario** paga la suscripción, descarga la app y, opcionalmente, maneja pendientes por WhatsApp.
+- El **propietario** paga la suscripción y usa la app en el teléfono, la tablet o el panel web de la computadora, con la misma cuenta; opcionalmente maneja pendientes por WhatsApp.
 - El **inquilino NO es usuario**: es un contacto. Nunca instala nada. Todo le llega por WhatsApp desde un **número central** de la plataforma.
 - Los **agentes** trabajan en segundo plano y solo suben al propietario lo que requiere una decisión suya.
 
 ## Stack
 - **Backend**: Python 3.12, FastAPI, SQLAlchemy 2.x, Alembic, Pydantic v2, PostgreSQL 16, Redis + RQ (tareas), WeasyPrint (PDF)
-- **App móvil**: React Native con Expo (SDK estable más reciente), TypeScript, Expo Router, TanStack Query para datos, Expo Notifications para push, EAS Build/Submit para publicar
+- **App del propietario**: React Native con Expo (SDK estable más reciente), TypeScript, Expo Router, TanStack Query para datos, Expo Notifications para push, EAS Build/Submit para publicar en tiendas. **Tres destinos con el mismo código**: iOS, Android y web (panel en el navegador, exportado con Expo para web)
 - **Sitio web**: Next.js (App Router) con TypeScript, generado de forma estática donde sea posible, optimizado para SEO y velocidad
 - **Tipos compartidos**: cliente de la API generado desde el OpenAPI de FastAPI (no escribir tipos a mano dos veces)
 - **IA**: API de Anthropic (Claude). Visión para leer comprobantes. Modelo configurable por variable de entorno
 - **WhatsApp**: Meta WhatsApp Cloud API (número central). En desarrollo se usa un **simulador local**
 - **Correo**: proveedor transaccional (Resend, Postmark o SES) detrás de una interfaz
 - **Archivos**: almacenamiento compatible con S3; en local, disco
-- **Tests**: pytest (backend), Jest + React Native Testing Library (móvil), Playwright para flujos críticos del sitio
+- **Tests**: pytest (backend), Jest + React Native Testing Library (app), Playwright para flujos críticos del sitio y del panel web
 - **CI**: GitHub Actions (lint + tests en cada push)
 
 ## Estructura del repositorio (monorepo)
@@ -40,7 +40,7 @@ backend/
     services/    # pdf, storage, llm
     jobs/        # tareas programadas
   tests/
-mobile/          # app Expo (propietario)
+mobile/          # app Expo del propietario (iOS, Android y panel web)
   app/           # rutas Expo Router
   src/components/  src/theme/  src/api/
 web/             # sitio Next.js
@@ -50,7 +50,7 @@ docs/
 ```
 
 ## Arquitectura (capas)
-1. **Canales**: app móvil, WhatsApp (inquilino y propietario), correo, notificaciones push
+1. **Canales**: app (teléfono, tablet y panel web), WhatsApp (inquilino y propietario), correo, notificaciones push
 2. **Agentes**: cobranza, conciliación, acuerdos, recibos, asistente del inquilino, asistente del propietario
 3. **Servicios núcleo**: libro de cuentas, motor de reglas, personalización del asistente, línea de tiempo/evidencia, consentimiento, roles y portafolios
 4. **Salidas**: Inicio (resumen + pendientes + lista de inquilinos), ficha, cobros, reportes
@@ -72,8 +72,9 @@ docs/
 9. **Datos asociados al contrato/apartamento**, no a la persona.
 10. **Envíos reales protegidos**: `MESSAGING_MODE=simulator|live`, por defecto `simulator`.
 11. **LLM detrás de una interfaz** con un fake determinístico para tests; salidas validadas con Pydantic.
-12. **Secretos** solo en variables de entorno; nunca en código, commits ni en el bundle de la app móvil.
+12. **Secretos** solo en variables de entorno; nunca en código, commits ni en el bundle de la app.
 13. **Requisitos de tiendas**: la app debe permitir eliminar la cuenta desde dentro, enlazar política de privacidad y términos, y pedir permisos (notificaciones, cámara, fotos) solo cuando se usan, explicando por qué.
+14. **Panel web**: el código específico de plataforma se aísla con archivos `.web.tsx` / `.native.tsx` o `Platform.OS`. En web: sesión con cookies httpOnly y protección CSRF (nunca tokens en localStorage), subida de archivos en lugar de cámara, y pendientes por WhatsApp o correo en lugar de push. Ninguna función esencial depende solo del teléfono.
 
 ## Idioma y tono
 - Código y comentarios: inglés.
@@ -84,12 +85,13 @@ docs/
 
 ## Alcance v1 (no construir nada fuera de esto sin preguntar)
 - Agentes: cobranza escalonada, conciliación, acuerdos de pago, recibos, asistente del inquilino, asistente del propietario.
-- App móvil: Inicio, Propiedades, Cobros, Ajustes + ficha del inquilino + onboarding. En tablet, vista maestro-detalle (lista a la izquierda, ficha a la derecha).
-- Sitio web: inicio, cómo funciona, planes, sobre el creador, descarga, preguntas frecuentes, contacto, privacidad, términos, eliminación de cuenta.
-- Fuera de v1: contratos con firma, evaluación de inquilinos, depósitos/inspección, expediente legal, llamadas con IA, pasarela de pagos propia, módulo de venta, administradoras multiusuario, panel web del propietario.
+- App del propietario: Inicio, Propiedades, Cobros, Ajustes + ficha del inquilino + onboarding. En tablet y en el panel web de computadora, vista maestro-detalle (lista a la izquierda, ficha a la derecha).
+- Sitio web: inicio, cómo funciona, planes, sobre el creador, descarga, preguntas frecuentes, contacto, privacidad, términos, eliminación de cuenta, y un botón "Entrar al panel" que lleva al panel web.
+- Fuera de v1: contratos con firma, evaluación de inquilinos, depósitos/inspección, expediente legal, llamadas con IA, pasarela de pagos propia, módulo de venta, administradoras multiusuario, app de escritorio instalable.
 
 ## Forma de trabajar
 - Antes de cada fase, proponer un plan corto y esperar aprobación.
 - Escribir tests junto con el código.
 - Preguntar antes de agregar una dependencia nueva.
+- El backend se ejecuta y prueba siempre en Docker (Smart App Control activo en Windows).
 - Al terminar una fase: correr tests, resumir lo hecho y lo pendiente, y sugerir el mensaje de commit.

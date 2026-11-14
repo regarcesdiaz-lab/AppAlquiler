@@ -1,14 +1,13 @@
-# Regenerates the typed API client used by the mobile app:
-#   1. backend/openapi.json      (from FastAPI, without starting the server)
-#   2. mobile/src/api/schema.d.ts (openapi-typescript)
+# Regenerates the typed API client used by the app:
+#   1. backend/openapi.json       (from FastAPI, inside the `api` Docker image; no server needed)
+#   2. mobile/src/api/schema.d.ts (openapi-typescript, on the host)
 # Run from anywhere:  .\scripts\gen-api.ps1
-$ErrorActionPreference = "Stop"
+#
+# (No $ErrorActionPreference = "Stop": docker writes progress to stderr; we check the exit code.)
 
 $root = Split-Path -Parent $PSScriptRoot
-$venvPython = Join-Path $root "backend\.venv\Scripts\python.exe"
-$python = if (Test-Path $venvPython) { $venvPython } else { "python" }
 
-& $python (Join-Path $root "backend\scripts\export_openapi.py")
+docker compose --project-directory $root run --rm --no-deps api uv run --locked python scripts/export_openapi.py
 if ($LASTEXITCODE -ne 0) { throw "OpenAPI export failed" }
 
 npm --prefix (Join-Path $root "mobile") run gen:api

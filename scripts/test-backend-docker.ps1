@@ -1,24 +1,19 @@
-# Runs the backend checks (uv sync --locked, ruff, pytest, OpenAPI export) inside a Linux
-# container, against the docker-compose Postgres/Redis. Same environment as CI.
-# Useful when Windows Smart App Control blocks compiled Python modules (SQLAlchemy, psycopg).
-# Prerequisite: docker compose up -d
+# Default way to test the backend: runs ruff and pytest inside the `api` image (Linux, exact
+# versions from uv.lock), against the docker-compose Postgres and Redis. Same environment as CI.
+#
+#   .\scripts\test-backend-docker.ps1                  # lint + format check + all tests
+#   .\scripts\test-backend-docker.ps1 -k health        # only pytest, with these arguments
+#   .\scripts\test-backend-docker.ps1 tests/test_jobs.py -x
+#
 # (No $ErrorActionPreference = "Stop": docker writes progress to stderr; we check the exit code.)
 
 $root = Split-Path -Parent $PSScriptRoot
-$network = "alquilerapp_default"
-$creds = "alquilerapp:alquilerapp"
+$compose = @("compose", "--project-directory", $root)
 
-docker run --rm `
-  --network $network `
-  -v "${root}\backend:/app" `
-  -w /app `
-  -e UV_PROJECT_ENVIRONMENT=/opt/venv `
-  -e UV_LINK_MODE=copy `
-  -e APP_ENV=test `
-  -e "DATABASE_URL=postgresql+psycopg://${creds}@postgres:5432/alquilerapp" `
-  -e "TEST_DATABASE_URL=postgresql+psycopg://${creds}@postgres:5432/alquilerapp_test" `
-  -e REDIS_URL=redis://redis:6379/0 `
-  -e MESSAGING_MODE=simulator `
-  python:3.12-slim `
-  sh -c "pip install -q --root-user-action=ignore uv==0.13.8 && uv sync --locked && uv run ruff check . && uv run ruff format --check . && uv run pytest && uv run python scripts/export_openapi.py"
-if ($LASTEXITCODE -ne 0) { throw "Backend checks failed" }
+if ($args.Count -gt 0) {
+  # Arguments are passed straight to pytest as separate words (no shell in between).
+  docker @compose run --rm api uv run --locked pytest @args
+} else {
+  docker @compose run --rm api sh -c "uv sync --locked && ruff check . && ruff format --check . && pytest"
+}
+if ($LASTEXITCODE -ne 0) { throw "Backend checks failed (exit code $LASTEXITCODE)" }

@@ -58,6 +58,34 @@ jobs:
           uv run python scripts/export_openapi.py
           git diff --exit-code -- openapi.json
 
+  # The backend is developed only in Docker: make sure the dev stack builds and starts.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Start postgres, redis, api and worker
+        run: docker compose up -d --build --wait
+      - name: API answers on localhost:8000
+        run: |
+          curl --fail --silent --show-error http://localhost:8000/health | tee health.json
+          grep -q '"database":"ok"' health.json
+          grep -q '"redis":"ok"' health.json
+      - name: Worker runs a job
+        run: |
+          docker compose exec -T api python -c "
+          import time
+          from app.jobs.queue import get_queue
+          job = get_queue().enqueue('builtins.len', 'hola')
+          for _ in range(20):
+              if job.get_status(refresh=True) == 'finished':
+                  break
+              time.sleep(0.5)
+          assert job.return_value() == 4, job.get_status()
+          "
+      - name: Logs
+        if: always()
+        run: docker compose logs --tail 80
+
   mobile:
     runs-on: ubuntu-latest
     defaults:
@@ -78,6 +106,8 @@ jobs:
         run: |
           npm run gen:api
           git diff --exit-code -- src/api/schema.d.ts
+      - name: Web panel builds
+        run: npm run export:web
 
   web:
     runs-on: ubuntu-latest

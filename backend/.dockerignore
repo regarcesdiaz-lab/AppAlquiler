@@ -1,0 +1,5 @@
+# The image only needs pyproject.toml, uv.lock and .python-version; code is bind-mounted.
+*
+!pyproject.toml
+!uv.lock
+!.python-version

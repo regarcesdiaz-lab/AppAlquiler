@@ -1,6 +1,26 @@
-# Local data services only. The backend runs on the host with uvicorn.
-# For a cloud database/Redis, just point DATABASE_URL / REDIS_URL in backend/.env elsewhere.
+# Full local backend: `docker compose up` starts Postgres, Redis, the API and the RQ worker.
+# The backend only runs in Docker (see CLAUDE.md): code is bind-mounted, dependencies come from
+# backend/uv.lock.
 name: alquilerapp
+
+x-backend: &backend
+  build: ./backend
+  image: alquilerapp-backend:dev
+  restart: unless-stopped
+  volumes:
+    - ./backend:/app
+  environment:
+    # These override backend/.env, whose URLs point at localhost.
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-alquilerapp}:${POSTGRES_PASSWORD:-alquilerapp}@postgres:5432/${POSTGRES_DB:-alquilerapp}
+    TEST_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-alquilerapp}:${POSTGRES_PASSWORD:-alquilerapp}@postgres:5432/${POSTGRES_TEST_DB:-alquilerapp_test}
+    REDIS_URL: redis://redis:6379/0
+    # File events do not cross the Windows -> Linux bind mount; poll so auto-reload works.
+    WATCHFILES_FORCE_POLLING: "true"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
 
 services:
   postgres:
@@ -32,6 +52,28 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # FastAPI with auto-reload. `uv sync --locked` is a no-op unless uv.lock changed since the build.
+  api:
+    <<: *backend
+    command: >
+      sh -c "uv sync --locked &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # RQ worker, restarted automatically when code under app/ changes.
+  worker:
+    <<: *backend
+    command: >
+      sh -c "uv sync --locked &&
+             watchfiles --filter python 'python -m app.jobs.worker' app"
 
 volumes:
   pgdata:

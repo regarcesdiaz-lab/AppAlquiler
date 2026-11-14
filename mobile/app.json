@@ -20,8 +20,13 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "server",
-      "favicon": "./assets/images/favicon.png"
+      "output": "single",
+      "lang": "es-DO",
+      "name": "AlquilerApp",
+      "shortName": "AlquilerApp",
+      "favicon": "./assets/images/favicon.png",
+      "themeColor": "#0E5E6F",
+      "backgroundColor": "#F7F7F5"
     },
     "plugins": [
       "expo-router",
