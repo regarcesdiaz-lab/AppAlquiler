@@ -168,19 +168,24 @@ Regenera `backend/openapi.json` (dentro de Docker) y `mobile/src/api/schema.d.ts
 
 ## Skill de diseño
 
-El trabajo de interfaz usa el skill `ui-ux-pro-max`, instalado en `.claude/skills/ui-ux-pro-max/`. **No está en git**: su repositorio no tiene licencia y este repositorio es público, así que cada quien lo instala en su PC.
+El trabajo de interfaz usa el skill `ui-ux-pro-max`, incluido en este repositorio en `.claude/skills/ui-ux-pro-max/`.
 
-Para reinstalarlo (desde la raíz del proyecto):
+- **Fuente oficial**: <https://github.com/nextlevelbuilder/ui-ux-pro-max-skill> (carpeta `.claude/skills/ui-ux-pro-max/`).
+- **Versión**: v2.15.0 (etiqueta del 14 ago 2026, commit `a38d04c`). Los archivos son idénticos byte a byte a los de esa etiqueta.
+- **Licencia**: MIT, © 2024 Next Level Builder. El texto está en `.claude/skills/ui-ux-pro-max/LICENSE`.
+- El skill trae sus propias paletas, tipografías y estilos. **`docs/BRAND.md` manda sobre ellos** en colores, tipografía, colores de estado, textos y tono; el skill solo aporta composición, jerarquía y buenas prácticas (ver "Diseño" en [CLAUDE.md](CLAUDE.md)).
+- No usar la opción `--persist` de su buscador: crea un `design-system/<proyecto>/MASTER.md` que competiría con `docs/BRAND.md`.
+- Su buscador solo usa la librería estándar de Python y lee los CSV de `data/`. En este proyecto se invoca con la ruta `.claude/skills/ui-ux-pro-max/scripts/search.py` (el `SKILL.md` usa la variable `CLAUDE_PLUGIN_ROOT`, que aquí no existe).
+
+Para actualizarlo a una versión más nueva (desde la raíz del proyecto; cambia `v2.15.0` por la etiqueta que quieras y revisa antes `SKILL.md` y `scripts/`):
 
 ```powershell
-git clone --depth 1 https://github.com/yuvalcohenrappaport/claude-skill-ui-ux-pro-max.git "$env:TEMP\ui-ux-pro-max"
-robocopy "$env:TEMP\ui-ux-pro-max" .claude\skills\ui-ux-pro-max /E /XD .git __pycache__ /XF *.pyc
-Remove-Item "$env:TEMP\ui-ux-pro-max" -Recurse -Force
+git clone --depth 1 --branch v2.15.0 https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git "$env:TEMP\uupm"
+Remove-Item .claude\skills\ui-ux-pro-max -Recurse -Force
+robocopy "$env:TEMP\uupm\.claude\skills\ui-ux-pro-max" .claude\skills\ui-ux-pro-max /E /XD __pycache__ /XF *.pyc
+Copy-Item "$env:TEMP\uupm\LICENSE" .claude\skills\ui-ux-pro-max\LICENSE
+Remove-Item "$env:TEMP\uupm" -Recurse -Force
 ```
-
-- Versión instalada: commit `c5b3742` (1 abr 2026). Revisa `SKILL.md` y `scripts/` antes de instalar una versión más nueva.
-- El skill trae sus propias paletas, tipografías y estilos. **`docs/BRAND.md` manda sobre ellos** en colores, tipografía, colores de estado, textos y tono; el skill solo aporta composición, jerarquía y buenas prácticas (ver "Diseño" en [CLAUDE.md](CLAUDE.md)).
-- No usar la opción `--persist` de su buscador: crea un `design-system/MASTER.md` que competiría con `docs/BRAND.md`.
 
 ## Pendientes por fase
 
