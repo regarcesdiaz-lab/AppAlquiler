@@ -166,6 +166,11 @@ Después de cambiar un endpoint o esquema del backend:
 
 Regenera `backend/openapi.json` (dentro de Docker) y `mobile/src/api/schema.d.ts`. Ambos se commitean; CI falla si están desactualizados.
 
+## Pendientes por fase
+
+- **Fase 3**: la sesión con cookies httpOnly + protección CSRF del panel web se construye en esta fase.
+- **Fase 10**: se agrega Playwright para el panel web; corre en Docker.
+
 ## Problemas conocidos en Windows
 
 **Smart App Control** (Seguridad de Windows → Control de aplicaciones y navegador) está activo y bloquea archivos compilados sin firma: módulos de SQLAlchemy y psycopg, los lanzadores `.exe` de un `.venv` y el Chromium de Playwright. El síntoma es `An Application Control policy has blocked this file` o `spawn UNKNOWN`. Por eso:
