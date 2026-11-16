@@ -166,6 +166,22 @@ Después de cambiar un endpoint o esquema del backend:
 
 Regenera `backend/openapi.json` (dentro de Docker) y `mobile/src/api/schema.d.ts`. Ambos se commitean; CI falla si están desactualizados.
 
+## Skill de diseño
+
+El trabajo de interfaz usa el skill `ui-ux-pro-max`, instalado en `.claude/skills/ui-ux-pro-max/`. **No está en git**: su repositorio no tiene licencia y este repositorio es público, así que cada quien lo instala en su PC.
+
+Para reinstalarlo (desde la raíz del proyecto):
+
+```powershell
+git clone --depth 1 https://github.com/yuvalcohenrappaport/claude-skill-ui-ux-pro-max.git "$env:TEMP\ui-ux-pro-max"
+robocopy "$env:TEMP\ui-ux-pro-max" .claude\skills\ui-ux-pro-max /E /XD .git __pycache__ /XF *.pyc
+Remove-Item "$env:TEMP\ui-ux-pro-max" -Recurse -Force
+```
+
+- Versión instalada: commit `c5b3742` (1 abr 2026). Revisa `SKILL.md` y `scripts/` antes de instalar una versión más nueva.
+- El skill trae sus propias paletas, tipografías y estilos. **`docs/BRAND.md` manda sobre ellos** en colores, tipografía, colores de estado, textos y tono; el skill solo aporta composición, jerarquía y buenas prácticas (ver "Diseño" en [CLAUDE.md](CLAUDE.md)).
+- No usar la opción `--persist` de su buscador: crea un `design-system/MASTER.md` que competiría con `docs/BRAND.md`.
+
 ## Pendientes por fase
 
 - **Fase 3**: la sesión con cookies httpOnly + protección CSRF del panel web se construye en esta fase.

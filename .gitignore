@@ -140,3 +140,7 @@ desktop.ini
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Third-party design skill: it has no license, so it is not redistributed in this repository.
+# Reinstall instructions are in README.md ("Skill de diseño").
+.claude/skills/ui-ux-pro-max/
