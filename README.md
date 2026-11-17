@@ -71,6 +71,10 @@ docker compose exec api alembic upgrade head                           # aplicar
 docker compose exec api alembic revision --autogenerate -m "mensaje"   # crear una nueva
 docker compose exec api alembic downgrade -1                           # deshacer la última
 
+# Datos demo (1 organización, 2 edificios, 7 apartamentos, 6 inquilinos en estados variados)
+docker compose exec api python -m scripts.seed_demo           # crearlos
+docker compose exec api python -m scripts.seed_demo --reset   # borrarlos y volver a crearlos
+
 # Cliente TypeScript de la API (después de cambiar endpoints o esquemas)
 .\scripts\gen-api.ps1
 

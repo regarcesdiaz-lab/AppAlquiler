@@ -9,33 +9,16 @@ from collections.abc import Iterator
 
 import pytest
 from alembic import command
-from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection, Engine, create_engine, text
+from sqlalchemy import Connection, Engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from app.core.config import BACKEND_DIR, get_settings
-from app.core.db import get_db
+from app.core.config import get_settings
+from app.core.db import get_db, make_engine
 from app.main import create_app
-
-
-def _ensure_database_exists(url: str) -> None:
-    target = make_url(url)
-    admin_engine = create_engine(
-        target.set(database="postgres"), isolation_level="AUTOCOMMIT", pool_pre_ping=True
-    )
-    try:
-        with admin_engine.connect() as conn:
-            exists = conn.execute(
-                text("SELECT 1 FROM pg_database WHERE datname = :name"),
-                {"name": target.database},
-            ).scalar()
-            if not exists:
-                conn.execute(text(f'CREATE DATABASE "{target.database}"'))
-    finally:
-        admin_engine.dispose()
+from tests.db_utils import alembic_config, ensure_database_exists
 
 
 @pytest.fixture(scope="session")
@@ -49,13 +32,10 @@ def test_engine() -> Iterator[Engine]:
             returncode=1,
         )
 
-    _ensure_database_exists(test_url)
+    ensure_database_exists(test_url)
+    command.upgrade(alembic_config(test_url), "head")
 
-    alembic_cfg = Config(str(BACKEND_DIR / "alembic.ini"))
-    alembic_cfg.set_main_option("sqlalchemy.url", test_url.replace("%", "%%"))
-    command.upgrade(alembic_cfg, "head")
-
-    engine = create_engine(test_url, pool_pre_ping=True)
+    engine = make_engine(test_url)
     yield engine
     engine.dispose()
 
