@@ -13,9 +13,12 @@ from app.domain.rule_templates import (
     DEFAULT_CONTACT_DAYS,
     DEFAULT_CONTACT_END,
     DEFAULT_CONTACT_START,
+    DEFAULT_MAX_REMINDERS_PER_DAY,
+    DEFAULT_MAX_REMINDERS_PER_WEEK,
+    PLATFORM_LATE_FEE_CAP_PERCENT,
 )
 from app.models.base import OrgScopedMixin, TimestampMixin, org_table_args, scoped_fk, str_enum
-from app.models.enums import ConsentMethod, LateFeeType, RuleTemplate
+from app.models.enums import ConsentMethod, LateFeeFrequency, LateFeeType, RuleTemplate
 
 
 class RuleSet(OrgScopedMixin, TimestampMixin, Base):
@@ -33,6 +36,16 @@ class RuleSet(OrgScopedMixin, TimestampMixin, Base):
         CheckConstraint("max_extension_days >= 0", name="max_extension_days_non_negative"),
         CheckConstraint(
             "max_extensions_per_year >= 0", name="max_extensions_per_year_non_negative"
+        ),
+        CheckConstraint(
+            "late_fee_cap_percent IS NULL OR (late_fee_cap_percent > 0"
+            f" AND late_fee_cap_percent <= {PLATFORM_LATE_FEE_CAP_PERCENT})",
+            name="late_fee_cap_range",
+        ),
+        CheckConstraint("escalation_days BETWEEN 0 AND 90", name="escalation_days_range"),
+        CheckConstraint("max_reminders_per_day >= 1", name="max_reminders_per_day_positive"),
+        CheckConstraint(
+            "max_reminders_per_week >= max_reminders_per_day", name="max_reminders_per_week_order"
         ),
         CheckConstraint("contact_start < contact_end", name="contact_window_order"),
         CheckConstraint("jsonb_typeof(contact_days) = 'array'", name="contact_days_array"),
@@ -55,6 +68,29 @@ class RuleSet(OrgScopedMixin, TimestampMixin, Base):
     late_fee_type: Mapped[LateFeeType] = mapped_column(str_enum(LateFeeType, "late_fee_type"))
     # Fixed amount in DOP, or a percentage of the rent when late_fee_type is "percent".
     late_fee_value: Mapped[Decimal] = mapped_column(default=Decimal("0.00"))
+    late_fee_frequency: Mapped[LateFeeFrequency] = mapped_column(
+        str_enum(LateFeeFrequency, "late_fee_frequency"),
+        default=LateFeeFrequency.ONCE,
+        server_default=LateFeeFrequency.ONCE.value,
+    )
+    # Percentage of the rent; NULL means only the platform cap (10 %) applies.
+    late_fee_cap_percent: Mapped[Decimal | None]
+    # Days after the due date, without payment or active promise, to escalate to the owner.
+    escalation_days: Mapped[int] = mapped_column(
+        SmallInteger, default=10, server_default=text("10")
+    )
+    # Collection reminders only; welcome, receipts, replies and promise confirmations don't count.
+    max_reminders_per_day: Mapped[int] = mapped_column(
+        SmallInteger,
+        default=DEFAULT_MAX_REMINDERS_PER_DAY,
+        server_default=text(str(DEFAULT_MAX_REMINDERS_PER_DAY)),
+    )
+    # Rolling 7 days.
+    max_reminders_per_week: Mapped[int] = mapped_column(
+        SmallInteger,
+        default=DEFAULT_MAX_REMINDERS_PER_WEEK,
+        server_default=text(str(DEFAULT_MAX_REMINDERS_PER_WEEK)),
+    )
     max_extension_days: Mapped[int] = mapped_column(SmallInteger)
     max_extensions_per_year: Mapped[int] = mapped_column(SmallInteger)
     contact_start: Mapped[dt.time] = mapped_column(default=DEFAULT_CONTACT_START)
@@ -91,6 +127,8 @@ class Lease(OrgScopedMixin, TimestampMixin, Base):
     rent_amount: Mapped[Decimal]
     due_day: Mapped[int] = mapped_column(SmallInteger)
     deposit_amount: Mapped[Decimal] = mapped_column(default=Decimal("0.00"))
+    # A late fee is only charged when the contract says so, whatever the rule set has.
+    late_fee_agreed: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     start_date: Mapped[dt.date]
     end_date: Mapped[dt.date | None]
     is_active: Mapped[bool] = mapped_column(default=True, server_default=text("true"))

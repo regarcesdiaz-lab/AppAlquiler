@@ -193,9 +193,10 @@ Remove-Item "$env:TEMP\uupm" -Recurse -Force
 
 ## Pendientes por fase
 
-- **Fase 2**: confirmar con un test que un `due_day` de 29, 30 o 31 vence el último día en los meses más cortos. La regla ya está implementada en `backend/app/domain/periods.py` (`due_date`); `tests/test_periods.py` cubre los días 30 y 31, falta el 29 en febrero de un año no bisiesto.
-- **Fase 2 o 3**: advertencia (no bloqueo) cuando `deposit_amount` supere 2 meses de renta en contratos de vivienda, por la Ley 85-25. Es solo una validación del monto; la custodia del depósito sigue fuera de la v1.
 - **Fase 3**: la sesión con cookies httpOnly + protección CSRF del panel web se construye en esta fase.
+- **Fase 3**: mostrar en el formulario del contrato la advertencia de depósito de `app/domain/deposit.py` (Ley 85-25, no bloquea) y el campo `late_fee_agreed` ("¿El contrato pacta mora?"). La interfaz muestra `overdue` con `in_grace=true` como "Atrasado · en gracia".
+- **Cada noviembre**: agregar los feriados del año siguiente en `backend/app/domain/data/holidays_do.toml` cuando el Ministerio de Trabajo publique el calendario. `tests/test_holidays.py` falla si faltan.
+- **Fase de agentes (cobranza)**: conectar el dominio a los trabajos programados: cargo mensual (`ledger.rent_charges_through`), mora diaria (`late_fee_for_charge` + `late_fee_to_post`), validador de envíos (`messaging_rules.validate_send`, `next_contact_time`) y pendientes al propietario (`escalation`). Decidir cómo se confirma una baja al inquilino: hoy, después de BAJA, el validador bloquea todo mensaje, incluidas las respuestas.
 - **Fase 7 (recibos)**: asignar `organizations.next_receipt_number` con bloqueo de fila (`SELECT ... FOR UPDATE`) dentro de la transacción de confirmación del pago, más un test de dos confirmaciones simultáneas que no repitan número. Hoy solo existe la restricción única `(organization_id, number)` en `receipts`.
 - **Fase 10**: se agrega Playwright para el panel web; corre en Docker.
 

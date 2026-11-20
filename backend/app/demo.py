@@ -23,6 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.timezone import business_zone
+from app.domain.formatting import format_dop
+from app.domain.ledger import LateFeeRules, late_fee_for_charge
 from app.domain.periods import add_months, due_date, period_of
 from app.domain.rule_templates import PRESETS, RulePreset, RuleTemplate
 from app.models import (
@@ -175,13 +177,6 @@ class DemoResult:
     owner_id: uuid.UUID
     vacant_unit_id: uuid.UUID
     leases: dict[uuid.UUID, Scenario] = field(default_factory=dict)
-
-
-def _format_dop(amount: Decimal) -> str:
-    """RD$25,000 (no decimals when they are ,00), as in docs/BRAND.md."""
-    if amount == amount.to_integral_value():
-        return f"RD${amount:,.0f}"
-    return f"RD${amount:,.2f}"
 
 
 class _Builder:
@@ -379,6 +374,11 @@ class _Builder:
                 grace_days=preset.grace_days,
                 late_fee_type=preset.late_fee_type,
                 late_fee_value=preset.late_fee_value,
+                late_fee_frequency=preset.late_fee_frequency,
+                late_fee_cap_percent=preset.late_fee_cap_percent,
+                escalation_days=preset.escalation_days,
+                max_reminders_per_day=preset.max_reminders_per_day,
+                max_reminders_per_week=preset.max_reminders_per_week,
                 max_extension_days=preset.max_extension_days,
                 max_extensions_per_year=preset.max_extensions_per_year,
                 contact_start=preset.contact_start,
@@ -500,6 +500,7 @@ class _Builder:
                 rent_amount=spec.rent,
                 due_day=due_day,
                 deposit_amount=spec.rent * 2,
+                late_fee_agreed=True,
                 start_date=start,
                 end_date=add_years(start, 1),
                 is_active=True,
@@ -554,7 +555,7 @@ class _Builder:
     ) -> None:
         today = self.today
         first_name = spec.name.split()[0]
-        rent = _format_dop(lease.rent_amount)
+        rent = format_dop(lease.rent_amount)
         due = due_date(period, lease.due_day)
 
         if spec.scenario == Scenario.PENDING_CONFIRMATION:
@@ -613,7 +614,7 @@ class _Builder:
                     payment_id=payment.id,
                     type=InboxItemType.PAYMENT_TO_CONFIRM,
                     summary=(
-                        f"{spec.name} reportó un pago de {_format_dop(payment.amount)}. "
+                        f"{spec.name} reportó un pago de {format_dop(payment.amount)}. "
                         "Revisa el comprobante y confírmalo."
                     ),
                     priority=1,
@@ -678,8 +679,18 @@ class _Builder:
                     template=template,
                 )
             fee_at = self.at(due + dt.timedelta(days=standard.grace_days + 1), 8)
-            fee = (lease.rent_amount * standard.late_fee_value / Decimal(100)).quantize(
-                Decimal("0.01")
+            fee = late_fee_for_charge(
+                rent_amount=lease.rent_amount,
+                due_on=due,
+                rules=LateFeeRules(
+                    grace_days=standard.grace_days,
+                    fee_type=standard.late_fee_type,
+                    value=standard.late_fee_value,
+                    frequency=standard.late_fee_frequency,
+                    cap_percent=standard.late_fee_cap_percent,
+                ),
+                agreed=lease.late_fee_agreed,
+                as_of=today,
             )
             self.add(
                 LedgerEntry(

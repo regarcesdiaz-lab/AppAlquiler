@@ -29,6 +29,9 @@ def test_add_months(period: str, months: int, expected: str) -> None:
     [
         ("2026-11", 15, dt.date(2026, 11, 15)),
         ("2026-02", 31, dt.date(2026, 2, 28)),
+        ("2027-02", 29, dt.date(2027, 2, 28)),  # day 29 in a non-leap February
+        ("2027-02", 30, dt.date(2027, 2, 28)),
+        ("2028-02", 29, dt.date(2028, 2, 29)),  # leap year: the 29th exists
         ("2028-02", 30, dt.date(2028, 2, 29)),
         ("2026-04", 31, dt.date(2026, 4, 30)),
     ],

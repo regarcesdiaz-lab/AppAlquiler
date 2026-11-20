@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.timezone import utc_now
+from app.domain.rule_templates import RuleTemplate
 from app.models import ConsentRecord, InboxItem, Issue, Message, PaymentPromise
 from app.models.enums import (
     ConsentMethod,
@@ -26,6 +27,7 @@ from tests.factories import (
     make_lease,
     make_org,
     make_payment,
+    make_rule_set,
     make_tenant,
     make_unit,
     make_user,
@@ -306,3 +308,47 @@ def test_unit_codes_are_unique_per_building_including_standalone_units(
     org = make_org(db_session)
     make_unit(db_session, org, code="1A")
     assert_rejected(db_session, lambda: make_unit(db_session, org, code="1A"))
+
+
+# -- collection rules (phase 2) ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("template", list(RuleTemplate))
+def test_every_preset_fits_the_rule_set_constraints(db_session: Session, template) -> None:
+    rule_set = make_rule_set(db_session, make_org(db_session), template)
+    assert rule_set.id is not None
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"late_fee_cap_percent": Decimal("10.01")},  # above the platform cap
+        {"late_fee_cap_percent": Decimal("0.00")},
+        {"escalation_days": -1},
+        {"max_reminders_per_day": 0},
+        {"max_reminders_per_day": 2, "max_reminders_per_week": 1},
+    ],
+)
+def test_rule_set_limits_are_enforced(db_session: Session, overrides) -> None:
+    org = make_org(db_session)
+    assert_rejected(db_session, lambda: make_rule_set(db_session, org, **overrides))
+
+
+def test_late_fee_is_not_agreed_unless_the_lease_says_so(db_session: Session) -> None:
+    lease = make_lease(db_session, make_org(db_session))
+    db_session.refresh(lease)
+    assert lease.late_fee_agreed is False
+
+
+def test_inbox_accepts_overdue_escalations(db_session: Session) -> None:
+    org = make_org(db_session)
+    item = add(
+        db_session,
+        InboxItem(
+            organization_id=org.id,
+            lease_id=make_lease(db_session, org).id,
+            type=InboxItemType.OVERDUE_ESCALATION,
+            summary="x",
+        ),
+    )
+    assert item.id is not None

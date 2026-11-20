@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 
-from app.domain.rule_templates import LateFeeType, RuleTemplate
+from app.domain.rule_templates import LateFeeFrequency, LateFeeType, RuleTemplate
 
 __all__ = [
     "AccountType",
@@ -14,6 +14,7 @@ __all__ = [
     "InboxItemStatus",
     "InboxItemType",
     "IssueStatus",
+    "LateFeeFrequency",
     "LateFeeType",
     "LedgerEntryType",
     "MessageChannel",
@@ -131,6 +132,7 @@ class InboxItemType(StrEnum):
     ISSUE_REPORTED = "issue_reported"
     TENANT_MESSAGE = "tenant_message"  # the assistant could not answer on its own
     CONSENT_REVOKED = "consent_revoked"
+    OVERDUE_ESCALATION = "overdue_escalation"  # still unpaid after the rule set's escalation day
 
 
 class InboxItemStatus(StrEnum):

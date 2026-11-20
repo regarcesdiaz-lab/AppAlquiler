@@ -7,11 +7,13 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.domain.rule_templates import PRESETS, RuleTemplate
 from app.models import (
     Lease,
     LedgerEntry,
     Organization,
     Payment,
+    RuleSet,
     Tenant,
     TimelineEvent,
     Unit,
@@ -123,3 +125,26 @@ def make_event(db: Session, lease: Lease, event_type: str = "test.event") -> Tim
             payload={"n": _next()},
         ),
     )
+
+
+def make_rule_set(
+    db: Session, org: Organization, template: RuleTemplate = RuleTemplate.STANDARD, **kwargs: Any
+) -> RuleSet:
+    preset = PRESETS[template]
+    values: dict[str, Any] = {
+        "name": f"Reglas {_next()}",
+        "template": template,
+        "grace_days": preset.grace_days,
+        "late_fee_type": preset.late_fee_type,
+        "late_fee_value": preset.late_fee_value,
+        "late_fee_frequency": preset.late_fee_frequency,
+        "late_fee_cap_percent": preset.late_fee_cap_percent,
+        "escalation_days": preset.escalation_days,
+        "max_reminders_per_day": preset.max_reminders_per_day,
+        "max_reminders_per_week": preset.max_reminders_per_week,
+        "max_extension_days": preset.max_extension_days,
+        "max_extensions_per_year": preset.max_extensions_per_year,
+        "reminder_sequence": preset.reminder_sequence_json(),
+    }
+    values.update(kwargs)
+    return add(db, RuleSet(organization_id=org.id, **values))

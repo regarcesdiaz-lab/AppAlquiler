@@ -1,0 +1,105 @@
+# Dominican Republic public holidays, as observed (after the moves of Ley 139-97).
+# Source: calendar published every year by the Ministerio de Trabajo (mt.gob.do).
+#
+# Add the next year as soon as the ministry publishes it (usually in November).
+# tests/test_holidays.py fails when the year after the current one is missing.
+#
+# Ley 139-97 moves Reyes, Duarte, Día del Trabajo and Constitución to a Monday when they fall
+# Tuesday to Friday. Año Nuevo, Altagracia, Independencia, Viernes Santo, Corpus Christi,
+# Restauración, Mercedes and Navidad are never moved.
+
+[[holiday]]
+date = 2026-01-01
+name = "Año Nuevo"
+
+[[holiday]]
+date = 2026-01-05
+name = "Día de los Santos Reyes (trasladado del martes 6)"
+
+[[holiday]]
+date = 2026-01-21
+name = "Día de Nuestra Señora de la Altagracia"
+
+[[holiday]]
+date = 2026-01-26
+name = "Día de Duarte"
+
+[[holiday]]
+date = 2026-02-27
+name = "Día de la Independencia Nacional"
+
+[[holiday]]
+date = 2026-04-03
+name = "Viernes Santo"
+
+[[holiday]]
+date = 2026-05-04
+name = "Día del Trabajo (trasladado del viernes 1)"
+
+[[holiday]]
+date = 2026-06-04
+name = "Corpus Christi"
+
+[[holiday]]
+date = 2026-08-16
+name = "Día de la Restauración"
+
+[[holiday]]
+date = 2026-09-24
+name = "Día de Nuestra Señora de las Mercedes"
+
+[[holiday]]
+date = 2026-11-09
+name = "Día de la Constitución (trasladado del viernes 6)"
+
+[[holiday]]
+date = 2026-12-25
+name = "Navidad"
+
+[[holiday]]
+date = 2027-01-01
+name = "Año Nuevo"
+
+[[holiday]]
+date = 2027-01-04
+name = "Día de los Santos Reyes (trasladado del miércoles 6)"
+
+[[holiday]]
+date = 2027-01-21
+name = "Día de Nuestra Señora de la Altagracia"
+
+[[holiday]]
+date = 2027-01-25
+name = "Día de Duarte (trasladado del martes 26)"
+
+[[holiday]]
+date = 2027-02-27
+name = "Día de la Independencia Nacional"
+
+[[holiday]]
+date = 2027-03-26
+name = "Viernes Santo"
+
+[[holiday]]
+date = 2027-05-01
+name = "Día del Trabajo"
+
+[[holiday]]
+date = 2027-05-27
+name = "Corpus Christi"
+
+[[holiday]]
+date = 2027-08-16
+name = "Día de la Restauración"
+
+[[holiday]]
+date = 2027-09-24
+name = "Día de Nuestra Señora de las Mercedes"
+
+[[holiday]]
+date = 2027-11-06
+name = "Día de la Constitución"
+
+[[holiday]]
+date = 2027-12-25
+name = "Navidad"
