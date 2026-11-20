@@ -193,7 +193,10 @@ Remove-Item "$env:TEMP\uupm" -Recurse -Force
 
 ## Pendientes por fase
 
+- **Fase 2**: confirmar con un test que un `due_day` de 29, 30 o 31 vence el último día en los meses más cortos. La regla ya está implementada en `backend/app/domain/periods.py` (`due_date`); `tests/test_periods.py` cubre los días 30 y 31, falta el 29 en febrero de un año no bisiesto.
+- **Fase 2 o 3**: advertencia (no bloqueo) cuando `deposit_amount` supere 2 meses de renta en contratos de vivienda, por la Ley 85-25. Es solo una validación del monto; la custodia del depósito sigue fuera de la v1.
 - **Fase 3**: la sesión con cookies httpOnly + protección CSRF del panel web se construye en esta fase.
+- **Fase 7 (recibos)**: asignar `organizations.next_receipt_number` con bloqueo de fila (`SELECT ... FOR UPDATE`) dentro de la transacción de confirmación del pago, más un test de dos confirmaciones simultáneas que no repitan número. Hoy solo existe la restricción única `(organization_id, number)` en `receipts`.
 - **Fase 10**: se agrega Playwright para el panel web; corre en Docker.
 
 ## Problemas conocidos en Windows
