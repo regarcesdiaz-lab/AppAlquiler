@@ -72,6 +72,7 @@ docker compose exec api alembic revision --autogenerate -m "mensaje"   # crear u
 docker compose exec api alembic downgrade -1                           # deshacer la última
 
 # Datos demo (1 organización, 2 edificios, 7 apartamentos, 6 inquilinos en estados variados)
+# Entrar con carmen.demo@example.com / demo-alquiler-2026 (solo desarrollo)
 docker compose exec api python -m scripts.seed_demo           # crearlos
 docker compose exec api python -m scripts.seed_demo --reset   # borrarlos y volver a crearlos
 
@@ -85,6 +86,21 @@ docker compose restart api worker            # reiniciar a mano
 ```
 
 Los tests usan la base `alquilerapp_test`: la crean si no existe, aplican las migraciones y deshacen cada test con un rollback. Se niegan a correr si `TEST_DATABASE_URL` es igual a `DATABASE_URL`.
+
+### API del propietario (`/v1`)
+
+Documentación interactiva en <http://localhost:8000/docs> (desactivada con `APP_ENV=production`). Para probarla: "Authorize" no hace falta; usa `POST /v1/auth/login` con `client: "app"` y pega el `access_token` como Bearer.
+
+| Cliente | Cómo se autentica |
+|---|---|
+| App móvil | `Authorization: Bearer <access_token>` (JWT, 15 min) + `refresh_token` opaco (60 días, rota en cada uso; reutilizar uno viejo cierra esa sesión) |
+| Panel web | Cookie `httpOnly` de sesión (7 días sin uso, 30 días máximo) + header `X-CSRF-Token` en todo POST/PUT/PATCH/DELETE. El token CSRF llega en el login y en `GET /v1/auth/session`; se guarda solo en memoria |
+
+- Contraseñas con Argon2id. Enlace mágico por correo (15 min, un solo uso). Límites de intentos en Redis (`429` con `Retry-After`).
+- En desarrollo el correo sale en el log de la API (`docker compose logs -f api`): ahí aparece el enlace mágico. WhatsApp usa el simulador: el mensaje también se ve en el log.
+- CORS solo permite el origen del panel (`CORS_ORIGINS`, por defecto `http://localhost:8081`).
+- Variables nuevas en `backend/.env.example`: `SECRET_KEY` (obligatoria en producción, 32+ caracteres), `PANEL_URL`, duración de tokens y sesiones, `COOKIE_SECURE`.
+- Todo recurso de otra organización responde 404. `tests/test_isolation_api.py` recorre todas las rutas `/v1` y falla si una ruta nueva no está en la matriz.
 
 ### Dependencias de Python
 
@@ -193,10 +209,15 @@ Remove-Item "$env:TEMP\uupm" -Recurse -Force
 
 ## Pendientes por fase
 
-- **Fase 3**: la sesión con cookies httpOnly + protección CSRF del panel web se construye en esta fase.
-- **Fase 3**: mostrar en el formulario del contrato la advertencia de depósito de `app/domain/deposit.py` (Ley 85-25, no bloquea) y el campo `late_fee_agreed` ("¿El contrato pacta mora?"). La interfaz muestra `overdue` con `in_grace=true` como "Atrasado · en gracia".
+- **Fase de la app**: el formulario del contrato pregunta "¿El contrato pacta mora?" (`late_fee_agreed`, la API no le pone valor por defecto), pide marcar el consentimiento y muestra las advertencias (`warnings`) que devuelve la API: depósito sobre 2 meses (Ley 85-25) y teléfono `+1` fuera de 809/829/849. Ninguna bloquea. La interfaz muestra `overdue` con `in_grace=true` como "Atrasado · en gracia".
+- **Fase de la app**: antes de eliminar la cuenta, ofrecer descargar el Excel de pagos (`GET /v1/payments/export.xlsx`).
+- **Fase de la app**: guardar los tokens en `expo-secure-store` y hacer **un solo** refresh a la vez (dos refresh en paralelo con el mismo token se toman como robo y cierran la sesión). En web, guardar el token CSRF solo en memoria.
+- **Fase de la app**: configurar universal links (iOS) y app links (Android) para `PANEL_URL/auth/magic`, así el enlace mágico abre la app instalada.
+- **Revisión legal**: confirmar si algún registro de cobros (pagos, recibos) debe conservarse por ley después de eliminar la cuenta. Hoy la eliminación borra todo y solo queda `account_deletion_requests` (id de la organización, SHA-256 del correo, fechas).
+- **Fase de almacenamiento**: al eliminar la cuenta, borrar también los archivos de la organización (comprobantes, documentos, fotos). Hay un TODO en `app/api/v1/account.py`.
+- **Producción**: proveedor de correo real (hoy solo `console`, que se niega a correr en producción); correr uvicorn con `--proxy-headers` detrás del proxy para que los límites por IP vean la IP real; definir `SECRET_KEY`, `PANEL_URL` y `CORS_ORIGINS`.
 - **Cada noviembre**: agregar los feriados del año siguiente en `backend/app/domain/data/holidays_do.toml` cuando el Ministerio de Trabajo publique el calendario. `tests/test_holidays.py` falla si faltan.
-- **Fase de agentes (cobranza)**: conectar el dominio a los trabajos programados: cargo mensual (`ledger.rent_charges_through`), mora diaria (`late_fee_for_charge` + `late_fee_to_post`), validador de envíos (`messaging_rules.validate_send`, `next_contact_time`) y pendientes al propietario (`escalation`). Decidir cómo se confirma una baja al inquilino: hoy, después de BAJA, el validador bloquea todo mensaje, incluidas las respuestas.
+- **Fase de agentes (cobranza)**: conectar el dominio a los trabajos programados: cargo mensual (`ledger.rent_charges_through`), mora diaria (`late_fee_for_charge` + `late_fee_to_post`), validador de envíos (`messaging_rules.validate_send`, `next_contact_time`; "recordar ahora" de la API ya lo usa) y pendientes al propietario (`escalation`). Cliente real de WhatsApp Cloud API en `app/channels/whatsapp.py` (hoy solo simulador; con `MESSAGING_MODE=live` se niega a enviar) y envío por la cola RQ. Decidir cómo se confirma una baja al inquilino: hoy, después de BAJA, el validador bloquea todo mensaje, incluidas las respuestas.
 - **Fase 7 (recibos)**: asignar `organizations.next_receipt_number` con bloqueo de fila (`SELECT ... FOR UPDATE`) dentro de la transacción de confirmación del pago, más un test de dos confirmaciones simultáneas que no repitan número. Hoy solo existe la restricción única `(organization_id, number)` en `receipts`.
 - **Fase 10**: se agrega Playwright para el panel web; corre en Docker.
 

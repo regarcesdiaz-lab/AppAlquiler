@@ -8,6 +8,8 @@ __all__ = [
     "AccountType",
     "ActorType",
     "AssistantTone",
+    "AuthMethod",
+    "ClientType",
     "ConsentMethod",
     "DevicePlatform",
     "DocumentType",
@@ -37,6 +39,18 @@ class UserRole(StrEnum):
 class DevicePlatform(StrEnum):
     IOS = "ios"
     ANDROID = "android"
+
+
+class ClientType(StrEnum):
+    """Which client signs in: the mobile app (bearer tokens) or the web panel (cookie)."""
+
+    APP = "app"
+    WEB = "web"
+
+
+class AuthMethod(StrEnum):
+    PASSWORD = "password"
+    MAGIC_LINK = "magic_link"
 
 
 class AccountType(StrEnum):

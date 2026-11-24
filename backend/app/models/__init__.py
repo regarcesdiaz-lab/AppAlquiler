@@ -1,7 +1,15 @@
 """All SQLAlchemy models. Importing this package registers them on Base.metadata."""
 
 from app.models import guards
-from app.models.account import DeviceToken, Organization, User, UserSession
+from app.models.account import (
+    AccountDeletionRequest,
+    DeviceToken,
+    MagicLinkToken,
+    Organization,
+    RefreshToken,
+    User,
+    UserSession,
+)
 from app.models.activity import Document, InboxItem, Issue, TimelineEvent
 from app.models.leasing import ConsentRecord, Lease, RuleSet
 from app.models.messaging import AssistantProfile, Message
@@ -9,6 +17,7 @@ from app.models.money import BankAccount, LedgerEntry, Payment, PaymentPromise, 
 from app.models.property import Building, Tenant, Unit
 
 __all__ = [
+    "AccountDeletionRequest",
     "AssistantProfile",
     "BankAccount",
     "Building",
@@ -19,11 +28,13 @@ __all__ = [
     "Issue",
     "Lease",
     "LedgerEntry",
+    "MagicLinkToken",
     "Message",
     "Organization",
     "Payment",
     "PaymentPromise",
     "Receipt",
+    "RefreshToken",
     "RuleSet",
     "Tenant",
     "TimelineEvent",

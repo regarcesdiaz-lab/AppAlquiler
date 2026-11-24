@@ -2,10 +2,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+MIN_SECRET_KEY_LENGTH = 32
+# Not a secret: only used outside production when SECRET_KEY is empty (production refuses it).
+DEVELOPMENT_SIGNING_KEY = "insecure-development-key-never-use-in-production"
 
 
 class Settings(BaseSettings):
@@ -23,9 +27,24 @@ class Settings(BaseSettings):
     )
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # Only the owner's web panel calls the API from a browser (Expo web on 8081 in development).
     CORS_ORIGINS: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["http://localhost:8081", "http://localhost:3000"]
+        default_factory=lambda: ["http://localhost:8081"]
     )
+
+    # Signs access tokens (JWT) and CSRF tokens. Required (32+ characters) in production.
+    SECRET_KEY: str = ""
+    ACCESS_TOKEN_TTL_MINUTES: int = 15
+    REFRESH_TOKEN_TTL_DAYS: int = 60
+    SESSION_IDLE_DAYS: int = 7
+    SESSION_ABSOLUTE_DAYS: int = 30
+    MAGIC_LINK_TTL_MINUTES: int = 15
+    # Web panel base URL: magic links point here (the app opens them through universal links).
+    PANEL_URL: str = "http://localhost:8081"
+    # Custom scheme of the app (mobile/app.json "scheme"), used for development deep links.
+    APP_SCHEME: str = "alquilerapp"
+    # Secure cookies need HTTPS; unset means "only in production".
+    COOKIE_SECURE: bool | None = None
 
     # All rent-collection date logic uses this zone; timestamps are stored in UTC.
     TIMEZONE: str = "America/Santo_Domingo"
@@ -53,12 +72,31 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY_ID: str = ""
     S3_SECRET_ACCESS_KEY: str = ""
 
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV == "production"
+
+    @property
+    def cookie_secure(self) -> bool:
+        return self.is_production if self.COOKIE_SECURE is None else self.COOKIE_SECURE
+
+    @property
+    def signing_key(self) -> str:
+        # Outside production an empty key falls back to a fixed, public development value.
+        return self.SECRET_KEY or DEVELOPMENT_SIGNING_KEY
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    @model_validator(mode="after")
+    def _production_needs_a_secret(self) -> "Settings":
+        if self.is_production and len(self.SECRET_KEY) < MIN_SECRET_KEY_LENGTH:
+            raise ValueError(f"SECRET_KEY must have at least {MIN_SECRET_KEY_LENGTH} characters")
+        return self
 
 
 @lru_cache

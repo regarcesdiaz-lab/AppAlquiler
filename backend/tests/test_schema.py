@@ -23,7 +23,8 @@ from app.core.config import get_settings
 from app.core.db import Base, make_engine
 from tests.db_utils import alembic_config, drop_database, ensure_database_exists
 
-GLOBAL_TABLES = {"organizations"}
+# Not scoped to an organization: the deletion log must outlive the organization it records.
+GLOBAL_TABLES = {"organizations", "account_deletion_requests"}
 APPEND_ONLY_TABLES = {"timeline_events", "ledger_entries"}
 
 
@@ -40,7 +41,7 @@ def test_migration_matches_models(test_engine: Engine) -> None:
 def test_v1_tables_exist(test_engine: Engine) -> None:
     tables = set(inspect(test_engine).get_table_names())
     assert set(Base.metadata.tables) <= tables
-    assert len(Base.metadata.tables) == 21
+    assert len(Base.metadata.tables) == 24
 
 
 @pytest.mark.parametrize("table", business_tables(), ids=lambda t: t.name)
