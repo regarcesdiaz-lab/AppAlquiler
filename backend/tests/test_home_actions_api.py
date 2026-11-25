@@ -222,17 +222,51 @@ def test_record_cash_payment(client: TestClient, db_session: Session) -> None:
 # -- reminder now ------------------------------------------------------------------------------
 
 
+def portfolio_without_pending_payment(client: TestClient, db_session: Session, owner):
+    """The portfolio's reported payment, rejected: the rent is owed and nothing waits."""
+    p = make_portfolio(db_session, owner.org)
+    ok(
+        client,
+        "POST",
+        f"/v1/payments/{p.payment.id}/reject",
+        owner.headers,
+        json={"reason": "No aparece en el banco."},
+    )
+    return p
+
+
+def test_reminder_is_blocked_while_a_reported_payment_waits(
+    client: TestClient, db_session: Session, freeze_time
+) -> None:
+    freeze_time(MONDAY_10AM)
+    owner = make_owner(db_session)
+    p = make_portfolio(db_session, owner.org)  # its payment is reported, not confirmed
+    response = client.post(f"/v1/leases/{p.lease.id}/reminders", headers=owner.headers)
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "reminder_blocked"
+    assert detail["reasons"] == ["pending_payment"]
+    assert detail["message"] == (
+        "María Fernández envió un comprobante. "
+        "Confírmalo o recházalo antes de enviarle un recordatorio."
+    )
+    assert detail["next_contact_time"] is None
+    assert db_session.scalar(select(func.count()).select_from(Message)) == 0
+
+
 def test_reminder_is_sent_through_the_simulator(
     client: TestClient, db_session: Session, freeze_time
 ) -> None:
     freeze_time(MONDAY_10AM)
     owner = make_owner(db_session)
-    p = make_portfolio(db_session, owner.org)
+    p = portfolio_without_pending_payment(client, db_session, owner)
     body = ok(client, "POST", f"/v1/leases/{p.lease.id}/reminders", owner.headers).json()
     assert body["status"] == "sent"
     assert "RD$25,000" in body["body"]
     message = db_session.get(Message, body["message_id"])
-    assert message.status == MessageStatus.SENT and message.provider_message_id.startswith("sim.")
+    assert message.status == MessageStatus.SENT and message.provider_message_id.startswith(
+        "wamid.SIM"
+    )
     assert {"message.queued", "message.sent"} <= set(events(db_session, p.lease.id))
 
     # Default rules: at most one collection reminder per day.
@@ -250,7 +284,7 @@ def test_reminder_respects_the_contact_window(
 ) -> None:
     freeze_time(when)
     owner = make_owner(db_session)
-    p = make_portfolio(db_session, owner.org)
+    p = portfolio_without_pending_payment(client, db_session, owner)
     response = client.post(f"/v1/leases/{p.lease.id}/reminders", headers=owner.headers)
     assert response.status_code == 409
     detail = response.json()["detail"]
@@ -264,7 +298,7 @@ def test_reminder_needs_current_consent(
 ) -> None:
     freeze_time(MONDAY_10AM)
     owner = make_owner(db_session)
-    p = make_portfolio(db_session, owner.org)
+    p = portfolio_without_pending_payment(client, db_session, owner)
     consent = db_session.scalar(select(ConsentRecord).where(ConsentRecord.lease_id == p.lease.id))
     consent.revoked_at = MONDAY_10AM - dt.timedelta(days=1)
     db_session.flush()

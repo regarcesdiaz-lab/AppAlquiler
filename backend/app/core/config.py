@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     WHATSAPP_ACCESS_TOKEN: str = ""
     WHATSAPP_VERIFY_TOKEN: str = ""
     WHATSAPP_APP_SECRET: str = ""
+    WHATSAPP_API_BASE_URL: str = "https://graph.facebook.com"
+    # Confirm the current Graph API version before going live (README, "Pendientes").
+    WHATSAPP_GRAPH_VERSION: str = "v23.0"
+    WHATSAPP_TEMPLATE_LANGUAGE: str = "es"
+    # Name the tenant sees in the reply to an unknown number.
+    PLATFORM_NAME: str = "AlquilerApp"
 
     EMAIL_PROVIDER: Literal["console", "resend", "postmark", "ses"] = "console"
     EMAIL_API_KEY: str = ""
@@ -92,10 +98,36 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
+    @property
+    def simulator_enabled(self) -> bool:
+        """The local WhatsApp simulator page: never in production."""
+        return not self.is_production and self.MESSAGING_MODE == "simulator"
+
     @model_validator(mode="after")
     def _production_needs_a_secret(self) -> "Settings":
         if self.is_production and len(self.SECRET_KEY) < MIN_SECRET_KEY_LENGTH:
             raise ValueError(f"SECRET_KEY must have at least {MIN_SECRET_KEY_LENGTH} characters")
+        return self
+
+    @model_validator(mode="after")
+    def _live_messaging_only_in_production(self) -> "Settings":
+        # Development and tests always use the simulator (CLAUDE.md, rule 10).
+        if self.MESSAGING_MODE != "live":
+            return self
+        if not self.is_production:
+            raise ValueError("MESSAGING_MODE=live is only allowed with APP_ENV=production")
+        missing = [
+            name
+            for name in (
+                "WHATSAPP_PHONE_NUMBER_ID",
+                "WHATSAPP_ACCESS_TOKEN",
+                "WHATSAPP_VERIFY_TOKEN",
+                "WHATSAPP_APP_SECRET",
+            )
+            if not getattr(self, name)
+        ]
+        if missing:
+            raise ValueError(f"MESSAGING_MODE=live needs {', '.join(missing)}")
         return self
 
 

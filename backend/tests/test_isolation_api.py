@@ -4,13 +4,14 @@ Organization A is signed in; organization B has a full portfolio. Every endpoint
 id must answer 404 for B's rows, lists must not show them, and A's writes on its own
 "singleton" resources (settings, organization) must leave B untouched.
 
-The guard test fails when a new /v1 route is not listed here, so no endpoint skips this check.
+The guard test walks every route the app really serves and fails when one is neither in the
+matrix below nor declared public, so no endpoint skips this check.
 """
 
 import re
 
 import pytest
-from fastapi.routing import APIRoute
+from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -19,6 +20,7 @@ from app.models import AssistantProfile, DeviceToken, Organization
 from app.models.enums import AssistantTone, DevicePlatform
 from tests.api_utils import Owner, Portfolio, make_owner, make_portfolio
 from tests.factories import add
+from tests.route_inventory import app_routes
 
 B_DEVICE = "ExponentPushToken[orgB]"
 
@@ -99,7 +101,30 @@ SELF_ROUTES = {
     ("GET", "/v1/payments/export.xlsx"),
 }
 
-PUBLIC_PREFIX = "/v1/auth/"
+# Not scoped to an organization on purpose. Each group says why.
+PUBLIC_PREFIXES = (
+    "/v1/auth/",  # sign-in, refresh, magic links, logout: the session itself
+)
+PUBLIC_ROUTES = {
+    ("GET", "/health"),
+    # Interactive docs and schema (turned off with APP_ENV=production).
+    ("GET", "/openapi.json"),
+    ("GET", "/docs"),
+    ("GET", "/docs/oauth2-redirect"),
+    ("GET", "/redoc"),
+    # Meta's WhatsApp webhook: subscription token (GET) and HMAC signature (POST), no session.
+    ("GET", "/webhooks/whatsapp"),
+    ("POST", "/webhooks/whatsapp"),
+    # Local WhatsApp simulator: only mounted outside production with MESSAGING_MODE=simulator
+    # (tests/test_dev_simulator.py checks it is absent in production).
+    ("GET", "/dev/whatsapp"),
+    ("GET", "/dev/whatsapp/api/contacts"),
+    ("GET", "/dev/whatsapp/api/chats/{phone}"),
+    ("DELETE", "/dev/whatsapp/api/chats/{phone}"),
+    ("POST", "/dev/whatsapp/api/chats/{phone}/fail-last"),
+    ("POST", "/dev/whatsapp/api/messages"),
+    ("POST", "/dev/whatsapp/api/media"),
+}
 
 
 @pytest.fixture
@@ -217,18 +242,72 @@ def _template(path: str) -> str:
     return re.sub(r"\{[^}]+\}", "{}", path.split("?")[0])
 
 
-def test_every_v1_route_is_covered_by_the_isolation_tests() -> None:
+def _covered() -> set[tuple[str, str]]:
     covered = {(m, _template(p)) for m, p, _ in ID_ROUTES}
     covered |= {(m, _template(p)) for m, p, _ in CROSS_CREATE}
     covered |= {("GET", _template(p)) for p in LIST_ROUTES}
     covered |= {(m, _template(p)) for m, p in SELF_ROUTES}
-    missing = []
-    for route in create_app().routes:
-        if not isinstance(route, APIRoute) or not route.path.startswith("/v1/"):
-            continue
-        if route.path.startswith(PUBLIC_PREFIX):
-            continue
-        for method in route.methods:
-            if (method, _template(route.path)) not in covered:
-                missing.append(f"{method} {route.path}")
+    return covered
+
+
+def _is_public(method: str, path: str) -> bool:
+    return path.startswith(PUBLIC_PREFIXES) or (method, _template(path)) in {
+        (m, _template(p)) for m, p in PUBLIC_ROUTES
+    }
+
+
+def uncovered_routes(app: FastAPI) -> list[str]:
+    """Routes of the app that are neither in the isolation matrix nor declared public."""
+    covered = _covered()
+    return sorted(
+        f"{method} {path}"
+        for method, path in app_routes(app)
+        if not _is_public(method, path) and (method, _template(path)) not in covered
+    )
+
+
+def test_every_route_is_covered_by_the_isolation_tests() -> None:
+    missing = uncovered_routes(create_app())
     assert missing == [], f"Add these routes to tests/test_isolation_api.py: {missing}"
+
+
+def test_the_route_inventory_sees_the_real_routes() -> None:
+    # Guards the guard: an empty inventory would make the test above pass without checking.
+    routes = app_routes(create_app())
+    assert len(routes) > 60
+    for expected in [
+        ("GET", "/v1/me"),
+        ("POST", "/v1/leases/{lease_id}/reminders"),
+        ("POST", "/webhooks/whatsapp"),
+        ("POST", "/dev/whatsapp/api/messages"),
+        ("GET", "/health"),
+    ]:
+        assert expected in routes
+
+
+def test_every_listed_route_still_exists() -> None:
+    # A route renamed or removed must leave the matrix too, or it would cover nothing.
+    real = {(m, _template(p)) for m, p in app_routes(create_app())}
+    listed = _covered() | {(m, _template(p)) for m, p in PUBLIC_ROUTES}
+    assert sorted(listed - real) == []
+
+
+def test_the_guard_fails_when_a_route_is_missing() -> None:
+    app = create_app()
+    extra = APIRouter(prefix="/v1")
+
+    @extra.get("/fake/{fake_id}/secrets")
+    def fake_secrets(fake_id: str) -> dict:  # pragma: no cover - never called
+        return {}
+
+    @extra.post("/fake")
+    def fake_create() -> dict:  # pragma: no cover - never called
+        return {}
+
+    app.include_router(extra)
+    app.add_api_route("/unlisted", fake_create, methods=["DELETE"])
+    assert uncovered_routes(app) == [
+        "DELETE /unlisted",
+        "GET /v1/fake/{fake_id}/secrets",
+        "POST /v1/fake",
+    ]

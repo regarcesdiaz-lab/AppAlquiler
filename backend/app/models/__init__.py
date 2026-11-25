@@ -12,7 +12,12 @@ from app.models.account import (
 )
 from app.models.activity import Document, InboxItem, Issue, TimelineEvent
 from app.models.leasing import ConsentRecord, Lease, RuleSet
-from app.models.messaging import AssistantProfile, Message
+from app.models.messaging import (
+    AssistantProfile,
+    Message,
+    WhatsAppConversation,
+    WhatsAppInboundEvent,
+)
 from app.models.money import BankAccount, LedgerEntry, Payment, PaymentPromise, Receipt
 from app.models.property import Building, Tenant, Unit
 
@@ -41,5 +46,7 @@ __all__ = [
     "Unit",
     "User",
     "UserSession",
+    "WhatsAppConversation",
+    "WhatsAppInboundEvent",
     "guards",
 ]

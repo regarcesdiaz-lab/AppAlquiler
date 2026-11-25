@@ -2,6 +2,7 @@
 
 from enum import StrEnum
 
+from app.domain.messaging_rules import MessageKind
 from app.domain.rule_templates import LateFeeFrequency, LateFeeType, RuleTemplate
 
 __all__ = [
@@ -11,6 +12,7 @@ __all__ = [
     "AuthMethod",
     "ClientType",
     "ConsentMethod",
+    "ContactType",
     "DevicePlatform",
     "DocumentType",
     "InboxItemStatus",
@@ -20,7 +22,9 @@ __all__ = [
     "LateFeeType",
     "LedgerEntryType",
     "MessageChannel",
+    "MessageContentType",
     "MessageDirection",
+    "MessageKind",
     "MessageStatus",
     "PaymentSource",
     "PaymentStatus",
@@ -117,6 +121,24 @@ class MessageStatus(StrEnum):
     READ = "read"
     FAILED = "failed"
     RECEIVED = "received"  # inbound messages only
+
+
+class ContactType(StrEnum):
+    """Who is on the other side of a message: a tenant (contact) or the owner (user)."""
+
+    TENANT = "tenant"
+    OWNER = "owner"
+
+
+class MessageContentType(StrEnum):
+    TEXT = "text"
+    TEMPLATE = "template"  # approved WhatsApp template (business-initiated, any time)
+    INTERACTIVE = "interactive"  # reply buttons or list (outbound), or a tap on them (inbound)
+    IMAGE = "image"
+    DOCUMENT = "document"
+    AUDIO = "audio"
+    VIDEO = "video"
+    OTHER = "other"  # sticker, location, contacts, unsupported
 
 
 class ActorType(StrEnum):

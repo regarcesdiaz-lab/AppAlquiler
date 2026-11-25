@@ -1,0 +1,112 @@
+# WhatsApp session messages: free-form answers inside the 24-hour window that opens when the
+# person writes to us. They are not sent to Meta for approval.
+#
+# - "tu" / "usted" follow the assistant's tone; "text" is the same in both tones.
+# - Variables: {{nombre}}. Every variable must be declared in "variables".
+# - Reply buttons: up to 3, title <= 20 characters. Lists: button <= 20 characters, up to 10
+#   rows, row title <= 24 and description <= 72 characters. Checked by templates.py.
+# - Button and row "action" values are handled by app/services/inbound.py.
+
+[labels]
+account_savings = "Cuenta de ahorros"
+account_checking = "Cuenta corriente"
+owner_row = "Como propietario"
+
+[messages.menu]
+variables = ["nombre"]
+tu = "¿En qué te ayudo, {{nombre}}?"
+usted = "¿En qué le ayudo, {{nombre}}?"
+list_button = "Ver opciones"
+rows = [
+  { action = "balance", title = "Ver mi balance" },
+  { action = "pay_info", title = "Datos para pagar" },
+  { action = "send_receipt", title = "Enviar comprobante" },
+  { action = "pay_later", title = "Pagaré en otra fecha" },
+  { action = "other", title = "Otra consulta" },
+]
+
+[messages.balance_due]
+variables = ["propietario", "monto"]
+tu = "Tu balance pendiente con {{propietario}} es {{monto}}. Si ya pagaste, envíanos el comprobante por aquí."
+usted = "Su balance pendiente con {{propietario}} es {{monto}}. Si ya pagó, envíenos el comprobante por aquí."
+
+[messages.balance_ok]
+variables = ["propietario", "monto", "fecha"]
+tu = "Estás al día con {{propietario}}. Tu próxima renta, de {{monto}}, vence el {{fecha}}."
+usted = "Está al día con {{propietario}}. Su próxima renta, de {{monto}}, vence el {{fecha}}."
+
+[messages.pay_info_intro]
+variables = ["propietario"]
+tu = "Puedes pagarle a {{propietario}} en estas cuentas:"
+usted = "Puede pagarle a {{propietario}} en estas cuentas:"
+
+[messages.pay_info_account]
+variables = ["banco", "tipo", "numero", "titular"]
+text = "{{banco}} · {{tipo}}\nNo. {{numero}}\nTitular: {{titular}}"
+
+[messages.pay_info_outro]
+variables = []
+tu = "Cuando pagues, envíanos el comprobante por aquí."
+usted = "Cuando pague, envíenos el comprobante por aquí."
+
+[messages.pay_info_none]
+variables = ["propietario"]
+tu = "Pídele los datos de pago a {{propietario}}."
+usted = "Pídale los datos de pago a {{propietario}}."
+
+[messages.send_receipt]
+variables = []
+tu = "Perfecto. Envía aquí la foto o el PDF del comprobante."
+usted = "Perfecto. Envíe aquí la foto o el PDF del comprobante."
+
+[messages.pay_later]
+variables = ["propietario"]
+tu = "¿Qué día puedes pagar? Escríbelo aquí y se lo pasamos a {{propietario}}."
+usted = "¿Qué día puede pagar? Escríbalo aquí y se lo pasamos a {{propietario}}."
+
+[messages.other]
+variables = ["propietario"]
+tu = "Escribe tu consulta y se la pasamos a {{propietario}}."
+usted = "Escriba su consulta y se la pasamos a {{propietario}}."
+
+[messages.free_text_ack]
+variables = ["propietario"]
+text = "Recibido. Se lo pasamos a {{propietario}}."
+
+[messages.unsupported_media]
+variables = []
+tu = "Por ahora no puedo escuchar notas de voz ni ver videos. Escríbeme o envía la foto del comprobante."
+usted = "Por ahora no puedo escuchar notas de voz ni ver videos. Escríbame o envíe la foto del comprobante."
+
+[messages.media_rejected]
+variables = []
+tu = "No pude abrir ese archivo. Envíame la foto (JPG o PNG) o el PDF del comprobante."
+usted = "No pude abrir ese archivo. Envíeme la foto (JPG o PNG) o el PDF del comprobante."
+
+[messages.alta_confirmed]
+variables = ["nombre", "propietario"]
+tu = "Listo, {{nombre}}. Volverás a recibir los avisos de {{propietario}} por este número. Escribe MENÚ cuando necesites algo."
+usted = "Muy bien, {{nombre}}. Volverá a recibir los avisos de {{propietario}} por este número. Escriba MENÚ cuando necesite algo."
+
+[messages.opt_out_notice]
+variables = []
+tu = "Tienes los mensajes desactivados. Si quieres volver a recibirlos, responde ALTA."
+usted = "Tiene los mensajes desactivados. Si desea volver a recibirlos, responda ALTA."
+
+[messages.choose_lease]
+variables = []
+text = "Tienes más de un contrato con nosotros. ¿Sobre cuál me escribes?"
+list_button = "Ver contratos"
+
+[messages.lease_inactive]
+variables = []
+text = "Ese contrato ya no está activo. Escribe MENÚ para ver opciones."
+
+[messages.unknown_number]
+variables = ["plataforma"]
+text = "Hola. Este es el número de avisos de cobro de {{plataforma}}. No encontramos un contrato con este número. Si eres inquilino, pídele a tu propietario que registre tu número de WhatsApp."
+
+# The owner is always addressed as "tú" (docs/BRAND.md).
+[messages.owner_placeholder]
+variables = ["nombre", "panel_url"]
+text = "Hola, {{nombre}}. Pronto podrás manejar tus pendientes por aquí. Mientras tanto, entra a la app o al panel: {{panel_url}}"

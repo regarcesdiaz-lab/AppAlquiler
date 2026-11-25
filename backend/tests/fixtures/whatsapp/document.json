@@ -1,0 +1,19 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {"display_phone_number": "18095550000", "phone_number_id": "106540352242922"},
+            "contacts": [{"profile": {"name": "María"}, "wa_id": "18095550101"}],
+            "messages": [{"from": "18095550101", "id": "wamid.DOC-1", "timestamp": "1795957440", "type": "document", "document": {"filename": "comprobante.pdf", "mime_type": "application/pdf", "sha256": "abc=", "id": "1048596549605678"}}]
+          }
+        }
+      ]
+    }
+  ]
+}

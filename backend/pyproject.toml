@@ -18,13 +18,13 @@ dependencies = [
     "openpyxl>=3.1.5",
     "python-multipart>=0.0.34",
     "email-validator>=2.4.0",
+    "httpx>=0.28",
 ]
 
 # Exact versions for every platform are pinned in uv.lock (`uv lock` to update, `uv sync` to install).
 [dependency-groups]
 dev = [
     "pytest>=8.3",
-    "httpx>=0.28",
     "ruff>=0.8",
 ]
 

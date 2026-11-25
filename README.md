@@ -97,10 +97,35 @@ Documentación interactiva en <http://localhost:8000/docs> (desactivada con `APP
 | Panel web | Cookie `httpOnly` de sesión (7 días sin uso, 30 días máximo) + header `X-CSRF-Token` en todo POST/PUT/PATCH/DELETE. El token CSRF llega en el login y en `GET /v1/auth/session`; se guarda solo en memoria |
 
 - Contraseñas con Argon2id. Enlace mágico por correo (15 min, un solo uso). Límites de intentos en Redis (`429` con `Retry-After`).
-- En desarrollo el correo sale en el log de la API (`docker compose logs -f api`): ahí aparece el enlace mágico. WhatsApp usa el simulador: el mensaje también se ve en el log.
+- En desarrollo el correo sale en el log de la API (`docker compose logs -f api`): ahí aparece el enlace mágico. WhatsApp usa el simulador (ver abajo).
 - CORS solo permite el origen del panel (`CORS_ORIGINS`, por defecto `http://localhost:8081`).
 - Variables nuevas en `backend/.env.example`: `SECRET_KEY` (obligatoria en producción, 32+ caracteres), `PANEL_URL`, duración de tokens y sesiones, `COOKIE_SECURE`.
 - Todo recurso de otra organización responde 404. `tests/test_isolation_api.py` recorre todas las rutas `/v1` y falla si una ruta nueva no está en la matriz.
+
+### WhatsApp: simulador y webhook
+
+**Simulador** (solo desarrollo): <http://localhost:8000/dev/whatsapp>. Con los datos demo cargados, elige un número de la izquierda (inquilinos y propietaria) o escribe otro para probar un número desconocido. Puedes escribir, usar MENÚ / BAJA / ALTA, tocar botones y filas de lista, adjuntar un comprobante (foto o PDF) y mandar una nota de voz.
+
+- Lo que escribes se convierte en un webhook con el formato exacto de Meta y pasa por el mismo camino que el real: parser → cola RQ → idempotencia → enrutador. Necesita el `worker` levantado; la respuesta tarda unos segundos.
+- Los estados vuelven por el mismo actualizador: "Entregado" al refrescar, "Leído" con el chat abierto. "Simular fallo de entrega" marca el último como fallido; "Repetir último mensaje" reenvía el mismo id para ver que no se procesa dos veces.
+- Arriba se ve si la ventana de 24 h está abierta (mensajes de sesión) o cerrada (solo plantillas), el consentimiento de cada contrato y los mensajes programados (bienvenidas fuera de horario).
+- No tiene autenticación: solo existe con `APP_ENV` distinto de `production` y `MESSAGING_MODE=simulator`.
+
+**Webhook real** (Meta): `GET /webhooks/whatsapp` verifica la suscripción con `WHATSAPP_VERIFY_TOKEN`; `POST /webhooks/whatsapp` exige la firma `X-Hub-Signature-256` con `WHATSAPP_APP_SECRET`. `MESSAGING_MODE=live` solo se acepta con `APP_ENV=production` y las cuatro variables de WhatsApp.
+
+**Textos**: las plantillas (para aprobación de Meta) están en `backend/app/channels/whatsapp/whatsapp_templates.toml` y los mensajes de sesión en `whatsapp_messages.toml`, en tú y usted. Se validan al cargar (límites y reglas de Meta). Para exportarlas en el formato de Meta:
+
+```powershell
+docker compose exec api python -m scripts.export_whatsapp_templates > plantillas.json
+```
+
+**Uso mensual** (para definir los planes): salientes por organización, mes y tipo (plantilla o sesión):
+
+```powershell
+docker compose exec api python -m scripts.messaging_usage --month 2026-11
+```
+
+Los comprobantes recibidos se guardan en `backend/storage/` (ignorado por git), bajo `org/<organización>/`.
 
 ### Dependencias de Python
 
@@ -214,10 +239,16 @@ Remove-Item "$env:TEMP\uupm" -Recurse -Force
 - **Fase de la app**: guardar los tokens en `expo-secure-store` y hacer **un solo** refresh a la vez (dos refresh en paralelo con el mismo token se toman como robo y cierran la sesión). En web, guardar el token CSRF solo en memoria.
 - **Fase de la app**: configurar universal links (iOS) y app links (Android) para `PANEL_URL/auth/magic`, así el enlace mágico abre la app instalada.
 - **Revisión legal**: confirmar si algún registro de cobros (pagos, recibos) debe conservarse por ley después de eliminar la cuenta. Hoy la eliminación borra todo y solo queda `account_deletion_requests` (id de la organización, SHA-256 del correo, fechas).
-- **Fase de almacenamiento**: al eliminar la cuenta, borrar también los archivos de la organización (comprobantes, documentos, fotos). Hay un TODO en `app/api/v1/account.py`.
+- **Fase de almacenamiento**: backend S3 en `app/services/storage.py` (hoy solo disco local). Al eliminar la cuenta ya se borra la carpeta `org/<id>/`; los documentos y fotos que se agreguen deben guardarse bajo ese mismo prefijo.
 - **Producción**: proveedor de correo real (hoy solo `console`, que se niega a correr en producción); correr uvicorn con `--proxy-headers` detrás del proxy para que los límites por IP vean la IP real; definir `SECRET_KEY`, `PANEL_URL` y `CORS_ORIGINS`.
 - **Cada noviembre**: agregar los feriados del año siguiente en `backend/app/domain/data/holidays_do.toml` cuando el Ministerio de Trabajo publique el calendario. `tests/test_holidays.py` falla si faltan.
-- **Fase de agentes (cobranza)**: conectar el dominio a los trabajos programados: cargo mensual (`ledger.rent_charges_through`), mora diaria (`late_fee_for_charge` + `late_fee_to_post`), validador de envíos (`messaging_rules.validate_send`, `next_contact_time`; "recordar ahora" de la API ya lo usa) y pendientes al propietario (`escalation`). Cliente real de WhatsApp Cloud API en `app/channels/whatsapp.py` (hoy solo simulador; con `MESSAGING_MODE=live` se niega a enviar) y envío por la cola RQ. Decidir cómo se confirma una baja al inquilino: hoy, después de BAJA, el validador bloquea todo mensaje, incluidas las respuestas.
+- **Fase de agentes (cobranza)**: conectar el dominio a los trabajos programados: cargo mensual (`ledger.rent_charges_through`), mora diaria (`late_fee_for_charge` + `late_fee_to_post`), secuencia automática de recordatorios (`reminders.SEQUENCE_TEMPLATES` + `messaging.send`, que ya valida, programa fuera de horario y elige plantilla o sesión) y pendientes al propietario (`escalation`).
+- **Fase de conciliación**: leer el comprobante con IA y reemplazar el pendiente genérico "envió un comprobante" (`tenant_message`) por `payment_to_confirm` con el pago en `reported`. El archivo ya llega validado por contenido y guardado en `messages.media_key`.
+- **Fase 7 (recibos)**: subir el PDF con `LiveWhatsAppChannel.upload_media` y enviarlo como encabezado de la plantilla `recibo_enviado`.
+- **Fase 8**: asistente del propietario en `app/agents/owner_assistant.py`. El enrutador ya reconoce al propietario por `users.whatsapp_phone` y guarda sus mensajes; hoy responde un texto temporal.
+- **Producción (WhatsApp)**: registrar el webhook en Meta (`https://<api>/webhooks/whatsapp`, campo `messages`); enviar las 16 plantillas a aprobación (`scripts.export_whatsapp_templates`; la de recibo necesita un PDF de ejemplo subido con la API de carga reanudable); confirmar `WHATSAPP_GRAPH_VERSION` vigente.
+- **Precios**: desde octubre de 2026 Meta cobra también los mensajes de servicio dentro de la ventana de 24 h, no solo las plantillas. Para definir los planes, usar la vista `monthly_outbound_message_counts` o `python -m scripts.messaging_usage --month AAAA-MM` (salientes por organización, por mes y por tipo: plantilla o sesión).
+- **Retención**: borrar a los 30 días los `whatsapp_inbound_events` de números desconocidos (guardan el teléfono) y limpiar `whatsapp_conversations` sin actividad.
 - **Fase 7 (recibos)**: asignar `organizations.next_receipt_number` con bloqueo de fila (`SELECT ... FOR UPDATE`) dentro de la transacción de confirmación del pago, más un test de dos confirmaciones simultáneas que no repitan número. Hoy solo existe la restricción única `(organization_id, number)` en `receipts`.
 - **Fase 10**: se agrega Playwright para el panel web; corre en Docker.
 

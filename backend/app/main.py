@@ -2,7 +2,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import health
+from app.api import dev_simulator, health, webhooks
 from app.api.v1 import account, auth, home, imports, leases, payments, properties, settings
 from app.core.config import get_settings
 
@@ -29,6 +29,10 @@ def create_app() -> FastAPI:
         max_age=600,
     )
     app.include_router(health.router)
+    app.include_router(webhooks.router)
+    # Local WhatsApp simulator: development and tests only, never in production.
+    if config.simulator_enabled:
+        app.include_router(dev_simulator.router)
 
     v1 = APIRouter(prefix=API_PREFIX)
     for module in (auth, account, settings, properties, leases, imports, home, payments):

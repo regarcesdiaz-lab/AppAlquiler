@@ -54,6 +54,7 @@ from app.schemas.properties import (
 from app.services import payments as payment_service
 from app.services import reminders as reminder_service
 from app.services.lease_state import load_lease_state, on_time_percent
+from app.services.messaging import send_welcome
 from app.services.timeline import record_event
 
 router = APIRouter(prefix="/leases", tags=["leases"], responses=COMMON_RESPONSES)
@@ -194,6 +195,8 @@ def create_lease(data: LeaseCreate, auth: CurrentAuth, db: DbSession) -> LeaseWr
         user_id=auth.user.id,
         method=ConsentMethod.CONTRACT_CLAUSE.value,
     )
+    # Queued with the lease; the job is enqueued once this commit succeeds.
+    send_welcome(db, lease, auth.user.id)
     db.commit()
     return LeaseWriteOut(
         lease=LeaseOut.model_validate(lease), warnings=warnings + _deposit_warnings(lease)

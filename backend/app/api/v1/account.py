@@ -36,6 +36,7 @@ from app.schemas.account import (
 )
 from app.services import auth as auth_service
 from app.services.account import purge_organization
+from app.services.storage import get_storage, organization_prefix
 
 router = APIRouter(tags=["account"], responses=COMMON_RESPONSES)
 
@@ -110,10 +111,13 @@ def delete_account(data: AccountDeleteIn, auth: CurrentAuth, db: DbSession) -> R
     )
     db.add(request)
     db.flush()
-    # TODO(storage phase): delete the organization's files (receipts, documents, photos).
-    purge_organization(db, auth.org_id)
+    org_id = auth.org_id  # the user row is gone after the purge
+    purge_organization(db, org_id)
     request.completed_at = utc_now()
     db.commit()
+    # Every file of the organization (WhatsApp receipts today; documents and photos later)
+    # lives under its prefix. After the commit: a failed purge must not delete files.
+    get_storage().delete_prefix(organization_prefix(org_id))
     body = AccountDeletedOut(deleted=True, request_id=request.id, completed_at=request.completed_at)
     response = Response(
         content=body.model_dump_json(), media_type="application/json", status_code=200

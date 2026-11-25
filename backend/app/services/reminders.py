@@ -1,39 +1,23 @@
-"""'Enviar recordatorio ahora': the owner asks, the send validator decides (rule 4)."""
+"""'Enviar recordatorio ahora': the owner asks, the send validator decides (rule 4).
+
+The text is an approved template (whatsapp_templates.toml): the friendly notice before the due
+date, the due-day notice on the day, or the firm notice when the rent is overdue. Unlike the
+automatic sequence, a manual reminder never waits for the next contact window: outside it, the
+owner gets the reason and the next valid time.
+"""
 
 import datetime as dt
 import uuid
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.channels.whatsapp import get_whatsapp_channel
-from app.core.timezone import business_zone, local_today, utc_now
-from app.domain.formatting import format_day_month, format_dop
-from app.domain.holidays import load_holidays
-from app.domain.messaging_rules import (
-    BlockReason,
-    Consent,
-    MessageKind,
-    SendRequest,
-    next_contact_time,
-    validate_send,
-)
-from app.domain.status import TenantState
-from app.models import (
-    AssistantProfile,
-    ConsentRecord,
-    Lease,
-    Message,
-    Organization,
-    Tenant,
-)
-from app.models.enums import AssistantTone, MessageChannel, MessageDirection, MessageStatus
-from app.services.lease_state import contact_rules, load_lease_state
-from app.services.timeline import record_event
-
-MANUAL_REMINDER_TEMPLATE = "reminder_manual"
-REMINDER_TEMPLATE_PREFIX = "reminder_"
-WEEK = dt.timedelta(days=7)
+from app.core.timezone import local_today
+from app.domain.formatting import format_days, format_dop, format_long_date
+from app.domain.messaging_rules import BlockReason, MessageKind
+from app.models import Lease, Message, Organization
+from app.models.enums import ActorType
+from app.services.lease_state import LeaseState, load_lease_state
+from app.services.messaging import SendBlockedError, lease_params, recipient_for_lease, send
 
 REASON_TEXT = {
     BlockReason.NO_CONSENT: "no hay consentimiento vigente para escribirle",
@@ -45,6 +29,15 @@ REASON_TEXT = {
     BlockReason.DAILY_LIMIT: "ya recibió el máximo de recordatorios de hoy",
     BlockReason.WEEKLY_LIMIT: "ya recibió el máximo de recordatorios de esta semana",
     BlockReason.ACTIVE_PROMISE: "tiene una promesa de pago vigente",
+    BlockReason.PENDING_PAYMENT: "envió un comprobante que falta confirmar",
+}
+
+# rule_sets.reminder_sequence step → template (the sequence data keeps its own names).
+SEQUENCE_TEMPLATES = {
+    "reminder_upcoming": "aviso_amable",
+    "reminder_due_today": "aviso_dia_pago",
+    "reminder_overdue": "aviso_firme",
+    "reminder_overdue_final": "aviso_firme",
 }
 
 
@@ -54,135 +47,61 @@ class NothingToRemindError(Exception):
 
 class ReminderBlockedError(Exception):
     def __init__(
-        self, reasons: tuple[BlockReason, ...], next_contact_time: dt.datetime | None
+        self,
+        reasons: tuple[BlockReason, ...],
+        next_contact_time: dt.datetime | None,
+        tenant_name: str = "",
     ) -> None:
         super().__init__(", ".join(reasons))
         self.reasons = reasons
         self.next_contact_time = next_contact_time
+        self.tenant_name = tenant_name
 
     def message(self) -> str:
+        if BlockReason.PENDING_PAYMENT in self.reasons:
+            # The one block the owner fixes right away: say what to do.
+            return (
+                f"{self.tenant_name} envió un comprobante. "
+                "Confírmalo o recházalo antes de enviarle un recordatorio."
+            )
         reasons = ", ".join(REASON_TEXT[r] for r in self.reasons)
         return f"No podemos enviar el recordatorio ahora: {reasons}."
 
 
-def _body(
-    tenant: Tenant, org: Organization, assistant: AssistantProfile | None, state, today: dt.date
-) -> str:
-    first = tenant.full_name.split()[0] if tenant.full_name.split() else tenant.full_name
-    name = assistant.display_name if assistant else "el asistente"
-    formal = assistant is not None and assistant.tone == AssistantTone.FORMAL
-    greeting = f"Saludos, {first}." if formal else f"Hola, {first}."
-    intro = f"Le escribe {name}, de {org.name}." if formal else f"Te escribe {name}, de {org.name}."
+def reminder_template(state: LeaseState, today: dt.date) -> tuple[str, dict[str, str]]:
+    """Which notice fits the lease today, and its own variables."""
     amount = format_dop(state.status.amount_due)
-    if state.status.state == TenantState.OVERDUE:
-        detail = (
-            f"Le recordamos que tiene un balance pendiente de {amount}."
-            if formal
-            else f"Te recordamos que tienes un balance pendiente de {amount}."
-        )
-    else:
-        due = state.next_due_on() or today
-        detail = (
-            f"Le recordamos que su renta de {amount} vence el {format_day_month(due)}."
-            if formal
-            else f"Te recordamos que tu renta de {amount} vence el {format_day_month(due)}."
-        )
-    return f"{greeting} {intro} {detail} Si ya pagaste, envíanos el comprobante por aquí."
+    # Past due: the firm notice, never "vence el" with a date that already passed.
+    if state.status.days_late > 0:
+        return "aviso_firme", {"dias": format_days(state.status.days_late), "monto": amount}
+    due = state.next_due_on() or today
+    if due == today:
+        return "aviso_dia_pago", {"monto": amount}
+    return "aviso_amable", {"monto": amount, "fecha": format_long_date(due)}
 
 
 def send_reminder_now(db: Session, lease: Lease, org: Organization, user_id: uuid.UUID) -> Message:
-    now = utc_now()
     today = local_today(org.timezone)
     state = load_lease_state(db, lease, today, org.timezone)
     if state.status.amount_due <= 0:
         raise NothingToRemindError
-
-    consent_row = db.scalar(
-        select(ConsentRecord)
-        .where(ConsentRecord.lease_id == lease.id)
-        .order_by(ConsentRecord.revoked_at.is_(None).desc(), ConsentRecord.granted_at.desc())
-        .limit(1)
-    )
-    consent = (
-        Consent(granted_at=consent_row.granted_at, revoked_at=consent_row.revoked_at)
-        if consent_row
-        else None
-    )
-    reminders_sent = db.scalars(
-        select(Message.created_at).where(
-            Message.lease_id == lease.id,
-            Message.direction == MessageDirection.OUTBOUND,
-            Message.template.like(f"{REMINDER_TEMPLATE_PREFIX}%"),
-            Message.status != MessageStatus.FAILED,
-            Message.created_at >= now - WEEK,
+    to = recipient_for_lease(db, lease)
+    if state.has_reported_payment:
+        # A receipt waits for the owner's decision: reminding the tenant now would be unfair.
+        raise ReminderBlockedError((BlockReason.PENDING_PAYMENT,), None, to.tenant_name)
+    template, own_params = reminder_template(state, today)
+    try:
+        return send(
+            db,
+            to,
+            MessageKind.COLLECTION_REMINDER,
+            template=template,
+            params=lease_params(db, to) | own_params,
+            actor=ActorType.OWNER,
+            user_id=user_id,
+            wait_for_window=False,
         )
-    ).all()
-    rules = contact_rules(state.rules)
-    holidays = load_holidays()
-    zone = business_zone(org.timezone)
-    decision = validate_send(
-        SendRequest(
-            kind=MessageKind.COLLECTION_REMINDER,
-            at=now,
-            consent=consent,
-            reminders_sent=list(reminders_sent),
-            active_promise_date=state.active_promise.promised_date
-            if state.active_promise
-            else None,
-        ),
-        rules,
-        holidays,
-        zone,
-    )
-    if not decision.allowed:
-        next_time = None
-        if not ({BlockReason.NO_CONSENT, BlockReason.CONSENT_REVOKED} & set(decision.reasons)):
-            try:
-                next_time = next_contact_time(now, rules, holidays, zone)
-            except ValueError:
-                next_time = None
-        raise ReminderBlockedError(decision.reasons, next_time)
-
-    tenant = db.get(Tenant, lease.tenant_id)
-    assert tenant is not None
-    assistant = db.scalar(
-        select(AssistantProfile).where(AssistantProfile.organization_id == org.id)
-    )
-    message = Message(
-        organization_id=org.id,
-        lease_id=lease.id,
-        tenant_id=tenant.id,
-        channel=MessageChannel.WHATSAPP,
-        direction=MessageDirection.OUTBOUND,
-        template=MANUAL_REMINDER_TEMPLATE,
-        body=_body(tenant, org, assistant, state, today),
-        status=MessageStatus.QUEUED,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(message)
-    db.flush()
-    record_event(
-        db,
-        org.id,
-        "message.queued",
-        lease=lease,
-        user_id=user_id,
-        message_id=message.id,
-        template=MANUAL_REMINDER_TEMPLATE,
-    )
-    message.provider_message_id = get_whatsapp_channel().send(
-        to=tenant.phone, body=message.body, template=message.template
-    )
-    message.status = MessageStatus.SENT
-    db.flush()
-    record_event(
-        db,
-        org.id,
-        "message.sent",
-        lease=lease,
-        user_id=user_id,
-        message_id=message.id,
-        template=MANUAL_REMINDER_TEMPLATE,
-    )
-    return message
+    except SendBlockedError as blocked:
+        raise ReminderBlockedError(
+            blocked.reasons, blocked.next_contact_time, to.tenant_name
+        ) from None

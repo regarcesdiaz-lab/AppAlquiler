@@ -25,6 +25,8 @@ class EscalationReason(StrEnum):
     PROMISE_BROKEN = "promise_broken"
     EXTENSION_OUT_OF_LIMIT = "extension_out_of_limit"
     CONSENT_REVOKED = "consent_revoked"
+    # The tenant wrote, or sent a file, and no assistant can answer it yet.
+    TENANT_MESSAGE = "tenant_message"
 
 
 # Values of app.models.enums.InboxItemType (kept as text so the domain doesn't import models).
@@ -33,6 +35,7 @@ INBOX_TYPE = {
     EscalationReason.PROMISE_BROKEN: "promise_broken",
     EscalationReason.EXTENSION_OUT_OF_LIMIT: "promise_to_approve",
     EscalationReason.CONSENT_REVOKED: "consent_revoked",
+    EscalationReason.TENANT_MESSAGE: "tenant_message",
 }
 
 # 1 = most urgent (inbox_items.priority).
@@ -41,6 +44,15 @@ PRIORITY = {
     EscalationReason.PROMISE_BROKEN: 1,
     EscalationReason.EXTENSION_OUT_OF_LIMIT: 2,
     EscalationReason.CONSENT_REVOKED: 2,
+    EscalationReason.TENANT_MESSAGE: 3,
+}
+
+SNIPPET_MAX = 280
+UNPLAYABLE = {
+    "audio": "una nota de voz",
+    "video": "un video",
+    "sticker": "un sticker",
+    "location": "una ubicación",
 }
 
 
@@ -108,6 +120,31 @@ def extension_task(
         parts.append(f"Ya usó {decision.used_this_year} de {max_per_year} prórrogas este año.")
     parts.append("¿La apruebas?")
     return _task(EscalationReason.EXTENSION_OUT_OF_LIMIT, " ".join(parts))
+
+
+def tenant_message_task(tenant_name: str, text: str) -> OwnerTask:
+    snippet = " ".join(text.split())
+    if len(snippet) > SNIPPET_MAX:
+        snippet = snippet[: SNIPPET_MAX - 1].rstrip() + "…"
+    return _task(
+        EscalationReason.TENANT_MESSAGE, f"{tenant_name} te escribió por WhatsApp: “{snippet}”"
+    )
+
+
+def tenant_receipt_task(tenant_name: str) -> OwnerTask:
+    return _task(
+        EscalationReason.TENANT_MESSAGE,
+        f"{tenant_name} envió un comprobante por WhatsApp. Revísalo en su ficha.",
+    )
+
+
+def tenant_unplayable_task(tenant_name: str, media_type: str) -> OwnerTask:
+    what = UNPLAYABLE.get(media_type, "un mensaje")
+    return _task(
+        EscalationReason.TENANT_MESSAGE,
+        f"{tenant_name} envió {what} por WhatsApp que no podemos mostrar. "
+        f"Comunícate con {_first_name(tenant_name)}.",
+    )
 
 
 def consent_revoked_task(tenant_name: str) -> OwnerTask:

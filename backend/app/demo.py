@@ -58,7 +58,9 @@ from app.models.enums import (
     IssueStatus,
     LedgerEntryType,
     MessageChannel,
+    MessageContentType,
     MessageDirection,
+    MessageKind,
     MessageStatus,
     PaymentSource,
     PaymentStatus,
@@ -229,6 +231,8 @@ class _Builder:
         template: str | None = None,
     ) -> Message:
         inbound = direction == MessageDirection.INBOUND
+        tenant = self.db.get(Tenant, lease.tenant_id)
+        is_reminder = template is not None and template.startswith("reminder_")
         msg = self.add(
             Message(
                 organization_id=self.org.id,
@@ -236,10 +240,18 @@ class _Builder:
                 tenant_id=lease.tenant_id,
                 channel=MessageChannel.WHATSAPP,
                 direction=direction,
+                kind=None
+                if inbound
+                else (MessageKind.COLLECTION_REMINDER if is_reminder else MessageKind.REPLY),
+                contact_phone=tenant.phone if tenant else None,
+                content_type=MessageContentType.TEMPLATE
+                if is_reminder
+                else MessageContentType.TEXT,
                 template=template,
                 body=body,
                 status=MessageStatus.RECEIVED if inbound else MessageStatus.READ,
                 provider_message_id=f"wamid.DEMO{uuid.uuid4().hex.upper()}",
+                sent_at=None if inbound else when,
                 created_at=when,
                 updated_at=when,
             )

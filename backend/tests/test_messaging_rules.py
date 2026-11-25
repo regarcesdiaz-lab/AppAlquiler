@@ -6,6 +6,7 @@ import pytest
 
 from app.domain.holidays import HolidayCalendar, load_holidays
 from app.domain.messaging_rules import (
+    ALLOWED_AFTER_OPT_OUT,
     SANTO_DOMINGO,
     BlockReason,
     Consent,
@@ -110,10 +111,29 @@ def test_consent_granted_later_does_not_count() -> None:
     assert check(consent=future) == (BlockReason.NO_CONSENT,)
 
 
-@pytest.mark.parametrize("kind", list(MessageKind))
+@pytest.mark.parametrize("kind", sorted(set(MessageKind) - ALLOWED_AFTER_OPT_OUT))
 def test_baja_stops_every_message_immediately(kind: MessageKind) -> None:
     revoked = Consent(granted_at=CONSENT.granted_at, revoked_at=local(20, 9, 59))
     assert BlockReason.CONSENT_REVOKED in check(kind, consent=revoked)
+
+
+@pytest.mark.parametrize("kind", sorted(ALLOWED_AFTER_OPT_OUT))
+def test_only_the_baja_confirmation_and_notice_pass_after_baja(kind: MessageKind) -> None:
+    revoked = Consent(granted_at=CONSENT.granted_at, revoked_at=local(20, 9, 59))
+    assert check(kind, consent=revoked) == ()
+    # Answers to the tenant: not limited by the contact window either.
+    assert check(kind, at=local(22, 10), consent=revoked) == ()
+
+
+def test_only_the_contact_window_can_wait() -> None:
+    sunday = validate_send(
+        SendRequest(MessageKind.WELCOME, local(22, 10), CONSENT), RULES, HOLIDAYS
+    )
+    assert sunday.only_outside_window
+    no_consent = validate_send(
+        SendRequest(MessageKind.WELCOME, local(22, 10), None), RULES, HOLIDAYS
+    )
+    assert not no_consent.only_outside_window
 
 
 def test_baja_after_the_send_time_does_not_block_it() -> None:
@@ -159,6 +179,13 @@ def test_daily_limit_uses_the_local_day() -> None:
 def test_other_messages_are_not_limited_by_frequency(kind: MessageKind) -> None:
     sent = [local(18, 10), local(19, 10), local(20, 9)]
     assert check(kind, reminders_sent=sent) == ()
+
+
+def test_no_collection_reminder_while_a_reported_payment_waits() -> None:
+    assert check(has_pending_payment=True) == (BlockReason.PENDING_PAYMENT,)
+    # Answers to the tenant and receipts are not reminders.
+    for kind in (MessageKind.REPLY, MessageKind.RECEIPT, MessageKind.WELCOME):
+        assert check(kind, has_pending_payment=True) == ()
 
 
 def test_custom_limits() -> None:

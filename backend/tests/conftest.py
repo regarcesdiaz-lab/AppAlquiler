@@ -27,11 +27,15 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.channels.email import Email, get_email_sender
+from app.channels.whatsapp import set_whatsapp_channel
+from app.channels.whatsapp.simulator import SimulatorChannel
 from app.core import timezone as tz
 from app.core.config import get_settings
 from app.core.db import get_db, make_engine
 from app.core.rate_limit import RateLimiter, get_rate_limiter
+from app.jobs.runner import InlineJobRunner, set_job_runner
 from app.main import create_app
+from app.services.storage import LocalStorage, set_storage
 from tests.db_utils import alembic_config, ensure_database_exists
 
 get_settings.cache_clear()
@@ -103,6 +107,43 @@ def rate_limiter() -> Iterator[RateLimiter]:
         redis.close()
 
 
+@pytest.fixture(autouse=True)
+def job_runner() -> Iterator[InlineJobRunner]:
+    """Jobs run inside the test's transaction; future ones wait in ``job_runner.future``."""
+    runner = InlineJobRunner()
+    set_job_runner(runner)
+    try:
+        yield runner
+    finally:
+        set_job_runner(None)
+
+
+@pytest.fixture(autouse=True)
+def whatsapp() -> Iterator[SimulatorChannel]:
+    """The WhatsApp simulator on real Redis, with keys unique to the test."""
+    redis = Redis.from_url(get_settings().REDIS_URL)
+    simulator = SimulatorChannel(redis, prefix=f"test-wa-{uuid.uuid4().hex}")
+    set_whatsapp_channel(simulator)
+    try:
+        yield simulator
+    finally:
+        set_whatsapp_channel(None)
+        keys = list(redis.scan_iter(f"{simulator.prefix}:*"))
+        if keys:
+            redis.delete(*keys)
+        redis.close()
+
+
+@pytest.fixture(autouse=True)
+def storage(tmp_path) -> Iterator[LocalStorage]:
+    local = LocalStorage(tmp_path / "storage")
+    set_storage(local)
+    try:
+        yield local
+    finally:
+        set_storage(None)
+
+
 @pytest.fixture
 def app(db_session: Session, outbox: Outbox, rate_limiter: RateLimiter) -> FastAPI:
     application = create_app()
@@ -120,8 +161,10 @@ def client(app: FastAPI) -> Iterator[TestClient]:
 
 @pytest.fixture
 def freeze_time(monkeypatch: pytest.MonkeyPatch) -> Callable[[dt.datetime], None]:
-    """Pin "now" everywhere utc_now() was imported (aware datetime, any zone)."""
+    """Pin "now" everywhere utc_now() was imported (aware datetime, any zone). Can be called
+    again in the same test to move the clock."""
     original = tz.utc_now
+    patched: set[str] = set()
 
     def freeze(at: dt.datetime) -> None:
         fixed = at.astimezone(dt.UTC)
@@ -129,8 +172,9 @@ def freeze_time(monkeypatch: pytest.MonkeyPatch) -> Callable[[dt.datetime], None
             if (
                 module
                 and module.__name__.startswith("app")
-                and getattr(module, "utc_now", None) is original
+                and (getattr(module, "utc_now", None) is original or module.__name__ in patched)
             ):
                 monkeypatch.setattr(module, "utc_now", lambda: fixed)
+                patched.add(module.__name__)
 
     return freeze

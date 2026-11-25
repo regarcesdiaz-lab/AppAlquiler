@@ -1,0 +1,19 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {"display_phone_number": "18095550000", "phone_number_id": "106540352242922"},
+            "contacts": [{"profile": {"name": "María"}, "wa_id": "18095550101"}],
+            "messages": [{"from": "18095550101", "id": "wamid.IMAGE-1", "timestamp": "1795957380", "type": "image", "image": {"caption": "Transferencia de noviembre", "mime_type": "image/jpeg", "sha256": "X1tRB5Kl7tB9s8n3dGw=", "id": "1048596549601234"}}]
+          }
+        }
+      ]
+    }
+  ]
+}

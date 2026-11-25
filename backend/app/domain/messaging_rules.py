@@ -10,11 +10,17 @@ Rules
   never on Sundays and never on Dominican holidays (rules 6 and 7).
 * **Responses** (a reply to the tenant, a promise confirmation) answer something the tenant
   wrote, so they don't need the window or a consent record; they still stop after BAJA.
+* **After BAJA** only two kinds still pass, both answers to the tenant's own message: the
+  confirmation of that BAJA (``OPT_OUT_CONFIRMATION``) and, at most once a day, the notice that
+  messages are off and ALTA turns them back on (``OPT_OUT_NOTICE``). The caller sends them only
+  in reply to an inbound message; this module can't see that.
 * **Frequency** limits count collection reminders only: at most ``max_per_day`` per local day
   and ``max_per_week`` in any rolling 7 days. Welcome, receipts, replies and promise
   confirmations don't count and are never limited.
 * **Active promise**: no collection reminder before the promised date. On the promised date
   itself a reminder is allowed ("te escribimos ese día").
+* **Payment waiting for confirmation**: no collection reminder while the tenant has a reported
+  payment the owner hasn't confirmed or rejected; the owner decides first.
 """
 
 import datetime as dt
@@ -44,12 +50,15 @@ class MessageKind(StrEnum):
     RECEIPT = "receipt"
     REPLY = "reply"
     PROMISE_CONFIRMATION = "promise_confirmation"
+    OPT_OUT_CONFIRMATION = "opt_out_confirmation"
+    OPT_OUT_NOTICE = "opt_out_notice"
 
 
 BUSINESS_INITIATED = frozenset(
     {MessageKind.COLLECTION_REMINDER, MessageKind.WELCOME, MessageKind.RECEIPT}
 )
 FREQUENCY_LIMITED = frozenset({MessageKind.COLLECTION_REMINDER})
+ALLOWED_AFTER_OPT_OUT = frozenset({MessageKind.OPT_OUT_CONFIRMATION, MessageKind.OPT_OUT_NOTICE})
 
 
 class BlockReason(StrEnum):
@@ -62,6 +71,13 @@ class BlockReason(StrEnum):
     DAILY_LIMIT = "daily_limit"
     WEEKLY_LIMIT = "weekly_limit"
     ACTIVE_PROMISE = "active_promise"
+    PENDING_PAYMENT = "pending_payment"  # a reported payment waits for the owner
+
+
+# Reasons that only mean "not now": the message can wait for the next contact window.
+CONTACT_WINDOW_REASONS = frozenset(
+    {BlockReason.SUNDAY, BlockReason.HOLIDAY, BlockReason.DAY_OFF, BlockReason.OUTSIDE_HOURS}
+)
 
 
 @dataclass(frozen=True)
@@ -109,6 +125,7 @@ class SendRequest:
     # Times of the collection reminders already sent for this lease.
     reminders_sent: Sequence[dt.datetime] = ()
     active_promise_date: dt.date | None = None
+    has_pending_payment: bool = False
 
 
 @dataclass(frozen=True)
@@ -118,6 +135,11 @@ class SendDecision:
     @property
     def allowed(self) -> bool:
         return not self.reasons
+
+    @property
+    def only_outside_window(self) -> bool:
+        """Blocked, but only by the contact window: it can be sent later."""
+        return bool(self.reasons) and set(self.reasons) <= CONTACT_WINDOW_REASONS
 
 
 def _require_aware(at: dt.datetime) -> None:
@@ -170,7 +192,8 @@ def validate_send(
 
     consent = request.consent
     if consent is not None and consent.is_revoked(request.at):
-        reasons.append(BlockReason.CONSENT_REVOKED)
+        if request.kind not in ALLOWED_AFTER_OPT_OUT:
+            reasons.append(BlockReason.CONSENT_REVOKED)
     elif request.kind in BUSINESS_INITIATED and (
         consent is None or not consent.is_current(request.at)
     ):
@@ -186,6 +209,8 @@ def validate_send(
         reasons.extend(frequency_blocks(local.date(), sent_days, rules))
         if request.active_promise_date is not None and local.date() < request.active_promise_date:
             reasons.append(BlockReason.ACTIVE_PROMISE)
+        if request.has_pending_payment:
+            reasons.append(BlockReason.PENDING_PAYMENT)
 
     return SendDecision(tuple(reasons))
 

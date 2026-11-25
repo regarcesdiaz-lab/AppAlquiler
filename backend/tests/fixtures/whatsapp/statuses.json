@@ -1,0 +1,24 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {"display_phone_number": "18095550000", "phone_number_id": "106540352242922"},
+            "statuses": [
+              {"id": "wamid.OUT-1", "status": "sent", "timestamp": "1795957200", "recipient_id": "18095550101", "conversation": {"id": "c1", "origin": {"type": "utility"}}, "pricing": {"billable": true, "pricing_model": "PMP", "category": "utility"}},
+              {"id": "wamid.OUT-1", "status": "delivered", "timestamp": "1795957205", "recipient_id": "18095550101"},
+              {"id": "wamid.OUT-1", "status": "read", "timestamp": "1795957300", "recipient_id": "18095550101"},
+              {"id": "wamid.OUT-2", "status": "failed", "timestamp": "1795957400", "recipient_id": "18095550101", "errors": [{"code": 131026, "title": "Message undeliverable", "message": "Message undeliverable", "error_data": {"details": "Message Undeliverable."}}]},
+              {"id": "wamid.OUT-3", "status": "deleted", "timestamp": "1795957500", "recipient_id": "18095550101"}
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+# WhatsApp message templates (category UTILITY), ready for Meta's approval.
+#
+# - Each template exists in two tones: "tu" (cordial) and "usted" (formal). The name sent to
+#   Meta is "<key>_<tone>", e.g. "aviso_amable_tu".
+# - Variables use Meta's named parameters: {{nombre}}. Every variable needs an example value.
+# - Rules checked by app/channels/whatsapp/templates.py: a body never starts or ends with a
+#   variable, two variables are never next to each other, body <= 1024 characters, footer <= 60,
+#   quick-reply button <= 25 characters, both tones present.
+# - "footer = true" adds the common footer (how to stop messages) of the matching tone.
+# - Quick-reply buttons carry an action; the payload sent with the template is
+#   "v1:<action>:<lease_id>", so a tap always comes back to the right contract.
+# - Export for Meta: python -m scripts.export_whatsapp_templates
+
+language = "es"
+category = "UTILITY"
+
+[footer]
+tu = "Responde BAJA si no quieres recibir mensajes."
+usted = "Responda BAJA si no desea recibir mensajes."
+
+[templates.bienvenida]
+kind = "welcome"
+footer = true
+variables = ["nombre", "asistente", "propietario", "apartamento"]
+buttons = [{ text = "Ver opciones", action = "menu" }]
+example = { nombre = "María", asistente = "Lucía", propietario = "Inversiones Rodríguez", apartamento = "Apto 3B, Residencial Sol" }
+tu = "Hola, {{nombre}}. Soy {{asistente}}, el asistente de {{propietario}} para el alquiler de {{apartamento}}. Por este número te llegarán los avisos de pago y tus recibos, y aquí mismo puedes enviar tus comprobantes. Escribe MENÚ cuando necesites algo."
+usted = "Saludos, {{nombre}}. Soy {{asistente}}, el asistente de {{propietario}} para el alquiler de {{apartamento}}. Por este número le llegarán los avisos de pago y sus recibos, y aquí mismo puede enviar sus comprobantes. Escriba MENÚ cuando necesite algo."
+
+[templates.aviso_amable]
+kind = "collection_reminder"
+footer = true
+variables = ["nombre", "asistente", "propietario", "apartamento", "monto", "fecha"]
+buttons = [{ text = "Ya pagué", action = "paid" }, { text = "Pagaré en otra fecha", action = "pay_later" }]
+example = { nombre = "María", asistente = "Lucía", propietario = "Inversiones Rodríguez", apartamento = "Apto 3B, Residencial Sol", monto = "RD$25,000", fecha = "viernes 1 de noviembre" }
+tu = "Hola, {{nombre}}. Te escribe {{asistente}}, de {{propietario}}. Te recordamos que la renta de {{apartamento}}, por {{monto}}, vence el {{fecha}}. Si ya pagaste, envíanos el comprobante por aquí."
+usted = "Saludos, {{nombre}}. Le escribe {{asistente}}, de {{propietario}}. Le recordamos que la renta de {{apartamento}}, por {{monto}}, vence el {{fecha}}. Si ya pagó, envíenos el comprobante por aquí."
+
+[templates.aviso_dia_pago]
+kind = "collection_reminder"
+footer = true
+variables = ["nombre", "asistente", "propietario", "apartamento", "monto"]
+buttons = [{ text = "Ya pagué", action = "paid" }, { text = "Pagaré en otra fecha", action = "pay_later" }]
+example = { nombre = "María", asistente = "Lucía", propietario = "Inversiones Rodríguez", apartamento = "Apto 3B, Residencial Sol", monto = "RD$25,000" }
+tu = "Hola, {{nombre}}. Te escribe {{asistente}}, de {{propietario}}. Hoy vence la renta de {{apartamento}}, por {{monto}}. Si ya pagaste, envíanos el comprobante por aquí. Gracias."
+usted = "Saludos, {{nombre}}. Le escribe {{asistente}}, de {{propietario}}. Hoy vence la renta de {{apartamento}}, por {{monto}}. Si ya pagó, envíenos el comprobante por aquí. Gracias."
+
+[templates.aviso_firme]
+kind = "collection_reminder"
+footer = true
+variables = ["nombre", "asistente", "propietario", "apartamento", "dias", "monto"]
+buttons = [{ text = "Ya pagué", action = "paid" }, { text = "Pagaré en otra fecha", action = "pay_later" }]
+example = { nombre = "María", asistente = "Lucía", propietario = "Inversiones Rodríguez", apartamento = "Apto 3B, Residencial Sol", dias = "5 días", monto = "RD$25,000" }
+tu = "Hola, {{nombre}}. Te escribe {{asistente}}, de {{propietario}}. La renta de {{apartamento}} tiene {{dias}} de atraso y el balance pendiente es {{monto}}. Te pedimos ponerte al día lo antes posible. Si ya pagaste, envíanos el comprobante por aquí."
+usted = "Saludos, {{nombre}}. Le escribe {{asistente}}, de {{propietario}}. La renta de {{apartamento}} tiene {{dias}} de atraso y el balance pendiente es {{monto}}. Le pedimos ponerse al día lo antes posible. Si ya pagó, envíenos el comprobante por aquí."
+
+[templates.comprobante_recibido]
+kind = "reply"
+footer = false
+variables = ["nombre", "propietario"]
+example = { nombre = "María", propietario = "Inversiones Rodríguez" }
+tu = "Gracias, {{nombre}}. Recibimos tu comprobante y se lo pasamos a {{propietario}} para confirmarlo. Te avisamos por aquí cuando el pago quede confirmado."
+usted = "Gracias, {{nombre}}. Recibimos su comprobante y se lo pasamos a {{propietario}} para confirmarlo. Le avisamos por aquí cuando el pago quede confirmado."
+
+[templates.recibo_enviado]
+kind = "receipt"
+footer = true
+header = "document"
+variables = ["nombre", "propietario", "monto", "periodo", "numero"]
+example = { nombre = "María", propietario = "Inversiones Rodríguez", monto = "RD$25,000", periodo = "noviembre 2026", numero = "0042" }
+tu = "Hola, {{nombre}}. {{propietario}} confirmó tu pago de {{monto}} correspondiente a {{periodo}}. Te enviamos el recibo No. {{numero}}. Guárdalo como constancia. Gracias."
+usted = "Saludos, {{nombre}}. {{propietario}} confirmó su pago de {{monto}} correspondiente a {{periodo}}. Le enviamos el recibo No. {{numero}}. Guárdelo como constancia. Gracias."
+
+[templates.promesa_confirmada]
+kind = "promise_confirmation"
+footer = false
+variables = ["nombre", "monto", "fecha"]
+example = { nombre = "María", monto = "RD$25,000", fecha = "viernes 8 de noviembre" }
+tu = "Listo, {{nombre}}. Anotamos que pagarás {{monto}} el {{fecha}}. Ese día te escribimos para recordártelo. Si pagas antes, envíanos el comprobante por aquí."
+usted = "Muy bien, {{nombre}}. Anotamos que pagará {{monto}} el {{fecha}}. Ese día le escribimos para recordárselo. Si paga antes, envíenos el comprobante por aquí."
+
+[templates.baja_confirmada]
+kind = "opt_out_confirmation"
+footer = false
+variables = ["nombre", "propietario"]
+example = { nombre = "María", propietario = "Inversiones Rodríguez" }
+tu = "Listo, {{nombre}}. Ya no recibirás mensajes de {{propietario}} por este número. Si cambias de opinión, responde ALTA."
+usted = "Muy bien, {{nombre}}. Ya no recibirá mensajes de {{propietario}} por este número. Si cambia de opinión, responda ALTA."

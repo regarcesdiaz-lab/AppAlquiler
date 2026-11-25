@@ -116,7 +116,15 @@ def test_create_lease_records_consent_events_and_deposit_warning(
     events = db_session.scalars(
         select(TimelineEvent.event_type).where(TimelineEvent.lease_id == lease_id)
     ).all()
-    assert set(events) == {"lease.created", "consent.granted"}
+    # The welcome is queued with the lease and goes out through the simulator.
+    assert set(events) >= {"lease.created", "consent.granted"}
+    assert set(events) <= {
+        "lease.created",
+        "consent.granted",
+        "message.queued",
+        "message.scheduled",
+        "message.sent",
+    }
 
     again = client.post("/v1/leases", headers=owner.headers, json=lease_payload(unit["id"]))
     assert again.status_code == 409 and again.json()["detail"]["code"] == "unit_occupied"

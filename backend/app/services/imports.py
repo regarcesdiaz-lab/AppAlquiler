@@ -26,6 +26,7 @@ from app.models import Building, ConsentRecord, Lease, Tenant, Unit
 from app.models.enums import ConsentMethod
 from app.schemas.properties import DEFAULT_CONSENT_EVIDENCE
 from app.services.exports import IMPORT_COLUMNS, TEMPLATE_SHEET
+from app.services.messaging import send_welcome
 from app.services.timeline import record_event
 
 MAX_FILE_BYTES = 2 * 1024 * 1024
@@ -442,4 +443,5 @@ def apply_import(db: Session, org_id: uuid.UUID, report: ImportReport, user_id: 
             method=ConsentMethod.CONTRACT_CLAUSE.value,
             source="excel_import",
         )
+        send_welcome(db, lease, user_id)
     record_event(db, org_id, "import.completed", user_id=user_id, **report.created)
