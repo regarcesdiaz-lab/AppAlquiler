@@ -9,6 +9,7 @@ import logging
 
 from rq import Worker
 from sqlalchemy import or_, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.db import SessionLocal
 from app.core.timezone import utc_now
@@ -21,15 +22,20 @@ logger = logging.getLogger(__name__)
 
 
 def requeue_due_messages() -> int:
+    """Best effort: the worker must start even if the database isn't migrated or reachable."""
     queue = get_queue()
-    with SessionLocal() as db:
-        ids = db.scalars(
-            select(Message.id).where(
-                Message.direction == MessageDirection.OUTBOUND,
-                Message.status == MessageStatus.QUEUED,
-                or_(Message.scheduled_for.is_(None), Message.scheduled_for <= utc_now()),
-            )
-        ).all()
+    try:
+        with SessionLocal() as db:
+            ids = db.scalars(
+                select(Message.id).where(
+                    Message.direction == MessageDirection.OUTBOUND,
+                    Message.status == MessageStatus.QUEUED,
+                    or_(Message.scheduled_for.is_(None), Message.scheduled_for <= utc_now()),
+                )
+            ).all()
+    except SQLAlchemyError:
+        logger.warning("Could not re-queue due WhatsApp messages (database not ready?)")
+        return 0
     for message_id in ids:
         queue.enqueue(run_job, "send_message", str(message_id), retry=RETRY)
     if ids:

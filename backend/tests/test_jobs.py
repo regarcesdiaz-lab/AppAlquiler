@@ -1,7 +1,9 @@
 from uuid import uuid4
 
 from rq import SimpleWorker
+from sqlalchemy.exc import ProgrammingError
 
+from app.jobs import worker
 from app.jobs.queue import DEFAULT_QUEUE, get_queue, get_redis
 
 
@@ -11,6 +13,16 @@ def double(value: int) -> int:
 
 def test_default_queue_name() -> None:
     assert get_queue().name == DEFAULT_QUEUE
+
+
+def test_worker_starts_even_if_the_database_is_not_migrated(monkeypatch) -> None:
+    # CI's docker job starts the worker on a fresh database (no migrations yet).
+    def missing_table():
+        raise ProgrammingError("SELECT messages.id", {}, Exception("relation does not exist"))
+
+    monkeypatch.setattr(worker, "SessionLocal", missing_table)
+    monkeypatch.setattr(worker, "get_queue", lambda: None)
+    assert worker.requeue_due_messages() == 0
 
 
 def test_worker_runs_an_enqueued_job() -> None:
